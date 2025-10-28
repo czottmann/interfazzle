@@ -578,6 +578,143 @@ class DocumentationGenerator {
     return types.filter { seen.insert($0).inserted }
   }
 
+  private func findMainSymbol(symbols: [SymbolGraph.Symbol],
+                              relationships: [SymbolGraph.Relationship],
+                              moduleName: String) -> SymbolGraph.Symbol?
+  {
+    // Build a map of symbol IDs to symbols for quick lookup
+    let symbolsByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.identifier.precise, $0) })
+
+    // First priority: Find inheritance hierarchy - look for base classes/structs that others inherit from
+    var inheritanceCounts: [String: Int] = [:]
+    for relationship in relationships {
+      if relationship.kind == "inheritsFrom" {
+        let targetID = relationship.target
+        // Check if the target is one of our symbols
+        if symbolsByID[targetID] != nil {
+          inheritanceCounts[targetID, default: 0] += 1
+        }
+      }
+    }
+
+    // Find the symbol with the most inheritors
+    if let mostInheritedID = inheritanceCounts.max(by: { $0.value < $1.value })?.key,
+       let mostInheritedSymbol = symbolsByID[mostInheritedID]
+    {
+      return mostInheritedSymbol
+    }
+
+    // Second priority: Look for symbol with name matching the module name
+    if let moduleMatchingSymbol = symbols.first(where: { $0.names.title == moduleName }) {
+      return moduleMatchingSymbol
+    }
+
+    return nil
+  }
+
+  private func buildDependencyGraph(symbols: [SymbolGraph.Symbol],
+                                    relationships: [SymbolGraph.Relationship]) -> [String: Set<String>]
+  {
+    // Build a map of symbol IDs to their dependencies
+    var dependencies: [String: Set<String>] = [:]
+    let symbolsByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.identifier.precise, $0) })
+
+    // Initialize empty dependencies for all symbols
+    for symbol in symbols {
+      dependencies[symbol.identifier.precise] = Set<String>()
+    }
+
+    // Analyze relationships to build dependencies
+    for relationship in relationships {
+      let sourceID = relationship.source
+      let targetID = relationship.target
+
+      // If both source and target are in our symbols, source depends on target
+      if symbolsByID[sourceID] != nil,
+         symbolsByID[targetID] != nil
+      {
+        dependencies[sourceID, default: Set<String>()].insert(targetID)
+      }
+    }
+
+    return dependencies
+  }
+
+  private func topologicalSort(symbols: [SymbolGraph.Symbol],
+                               dependencies: [String: Set<String>]) -> [SymbolGraph.Symbol]
+  {
+    var remainingSymbols = symbols
+    var processedIDs = Set<String>()
+    var sortedSymbols: [SymbolGraph.Symbol] = []
+
+    // Iteratively find symbols with no unprocessed dependencies
+    while !remainingSymbols.isEmpty {
+      var foundSymbol = false
+
+      for (index, symbol) in remainingSymbols.enumerated() {
+        let symbolID = symbol.identifier.precise
+        let symbolDeps = dependencies[symbolID] ?? Set<String>()
+
+        // Check if all dependencies have been processed
+        if symbolDeps.isSubset(of: processedIDs) {
+          sortedSymbols.append(symbol)
+          processedIDs.insert(symbolID)
+          remainingSymbols.remove(at: index)
+          foundSymbol = true
+          break
+        }
+      }
+
+      // If we couldn't find a symbol with no dependencies, we have a cycle
+      if !foundSymbol {
+        // Add remaining symbols in their original order to break the cycle
+        sortedSymbols.append(contentsOf: remainingSymbols)
+        break
+      }
+    }
+
+    return sortedSymbols
+  }
+
+  private func getTypeHierarchyRank(_ kindIdentifier: String) -> Int {
+    // Define hierarchy: Classes (1) → Structs (2) → Enums (3) → Protocols (4) → Extensions (5) → Macros (6) → Functions
+    // (7)
+    switch kindIdentifier {
+      case "swift.class":
+        1
+      case "swift.struct":
+        2
+      case "swift.enum":
+        3
+      case "swift.protocol":
+        4
+      case let kind where kind.contains("extension"):
+        5
+      case "swift.macro":
+        6
+      case "swift.func":
+        7
+      default:
+        8
+    }
+  }
+
+  private func sortSymbolsByHierarchy(symbols: [SymbolGraph.Symbol],
+                                      dependencies: [String: Set<String>]) -> [SymbolGraph.Symbol]
+  {
+    // First, sort by dependencies using topological sort
+    let dependencySorted = topologicalSort(symbols: symbols, dependencies: dependencies)
+
+    // Then, group by type hierarchy while preserving dependency order where possible
+    let grouped = Dictionary(grouping: dependencySorted) { symbol in
+      getTypeHierarchyRank(symbol.kind.identifier)
+    }
+
+    // Sort groups by hierarchy rank and flatten
+    let sortedRanks = grouped.keys.sorted()
+    return sortedRanks.flatMap { grouped[$0]?.sorted(by: { $0.names.title < $1.names.title }) ?? [] }
+  }
+
   private func generateModuleFile(moduleName: String, symbols: [SymbolGraph.Symbol],
                                   allSymbolsByPath: [String: SymbolGraph.Symbol],
                                   extensionGroups: [String: [SymbolGraph.Symbol]],
@@ -615,34 +752,25 @@ class DocumentationGenerator {
       }
     }
 
-    // Group by kind
-    var protocols: [SymbolGraph.Symbol] = []
-    var structs: [SymbolGraph.Symbol] = []
-    var classes: [SymbolGraph.Symbol] = []
-    var enums: [SymbolGraph.Symbol] = []
-    var extensions: [SymbolGraph.Symbol] = []
-    var macros: [SymbolGraph.Symbol] = []
-    var functions: [SymbolGraph.Symbol] = []
+    // Build dependency graph for hierarchy-based sorting
+    let dependencies = buildDependencyGraph(symbols: symbols, relationships: relationships)
 
-    for symbol in symbols {
-      switch symbol.kind.identifier {
-        case "swift.protocol":
-          protocols.append(symbol)
-        case "swift.struct":
-          structs.append(symbol)
-        case "swift.class":
-          classes.append(symbol)
-        case "swift.enum":
-          enums.append(symbol)
-        case "swift.macro":
-          macros.append(symbol)
-        case "swift.func":
-          functions.append(symbol)
-        case let kind where kind.contains("extension"):
-          extensions.append(symbol)
-        default:
-          break
-      }
+    // Find the main symbol (if any) that should appear first
+    let mainSymbol = findMainSymbol(symbols: symbols, relationships: relationships, moduleName: moduleName)
+
+    // Sort symbols by hierarchy (dependencies first, then by type hierarchy)
+    let hierarchySortedSymbols = sortSymbolsByHierarchy(symbols: symbols, dependencies: dependencies)
+
+    // Separate main symbol from the rest if found
+    var orderedSymbols: [SymbolGraph.Symbol] = []
+    var remainingSymbols: [SymbolGraph.Symbol] = []
+
+    if let main = mainSymbol {
+      orderedSymbols.append(main)
+      remainingSymbols = hierarchySortedSymbols.filter { $0.identifier.precise != main.identifier.precise }
+    }
+    else {
+      remainingSymbols = hierarchySortedSymbols
     }
 
     // Add public interface heading before first code block
@@ -658,7 +786,7 @@ class DocumentationGenerator {
       }
 
       markdown += "```swift\n"
-      for (index, symbol) in symbols.sorted(by: { $0.names.title < $1.names.title }).enumerated() {
+      for (index, symbol) in symbols.enumerated() {
         if index > 0 {
           markdown += "\n"
         }
@@ -672,15 +800,15 @@ class DocumentationGenerator {
       markdown += "```\n\n"
     }
 
-    writeInterfaceBlock(protocols)
-    writeInterfaceBlock(structs)
-    writeInterfaceBlock(classes)
-    writeInterfaceBlock(enums)
-    writeInterfaceBlock(extensions)
-    writeInterfaceBlock(macros)
-    writeInterfaceBlock(functions)
+    // Write main symbol first if found
+    if !orderedSymbols.isEmpty {
+      writeInterfaceBlock(orderedSymbols)
+    }
 
-    // Write extension groups (extensions to external types)
+    // Write remaining symbols
+    writeInterfaceBlock(remainingSymbols)
+
+    // Write extension groups (extensions to external types) with hierarchy-based ordering
     if !extensionGroups.isEmpty {
       if !hasAddedHeading {
         markdown += "### Public interface\n\n"
@@ -688,7 +816,22 @@ class DocumentationGenerator {
       }
 
       markdown += "```swift\n"
-      for (index, (extendedType, methods)) in extensionGroups.sorted(by: { $0.key < $1.key }).enumerated() {
+
+      // Sort extension groups using the same hierarchy logic
+      var sortedExtensionGroups: [(String, [SymbolGraph.Symbol])] = []
+
+      for (extendedType, methods) in extensionGroups {
+        // Build dependencies for extension methods
+        let extDependencies = buildDependencyGraph(symbols: methods, relationships: relationships)
+        // Sort methods by hierarchy
+        let sortedMethods = sortSymbolsByHierarchy(symbols: methods, dependencies: extDependencies)
+        sortedExtensionGroups.append((extendedType, sortedMethods))
+      }
+
+      // Sort extension groups by extended type name
+      sortedExtensionGroups.sort { $0.0 < $1.0 }
+
+      for (index, (extendedType, methods)) in sortedExtensionGroups.enumerated() {
         if index > 0 {
           markdown += "\n"
         }
