@@ -4,9 +4,23 @@ import Foundation
 
 // MARK: - Config
 
+/// Configuration settings for the interfazzle documentation generator.
+///
+/// This struct encapsulates all command-line options and settings that control
+/// how symbol graphs are built and documentation is generated.
 struct Config {
   // MARK: - Static Properties
 
+  /// Default configuration values for the documentation generator.
+  ///
+  /// These defaults are used when no command-line arguments are provided.
+  /// - symbolGraphsDir: ".build/symbol-graphs" - Standard Swift build output directory
+  /// - outputDir: "docs" - Default documentation output directory
+  /// - modules: nil - Document all public modules by default
+  /// - generateOnly: false - Build symbol graphs before generating docs
+  /// - verbose: false - Suppress detailed build output
+  /// - beLenient: false - Fail on build errors unless explicitly overridden
+  /// - includeReexported: false - Exclude re-exported symbols from external modules
   static let `default` = Config(
     symbolGraphsDir: ".build/symbol-graphs",
     outputDir: "docs",
@@ -19,17 +33,57 @@ struct Config {
 
   // MARK: - Properties
 
+  /// Directory path where Swift symbol graph files are located or will be generated.
+  ///
+  /// Symbol graphs contain the structural information about Swift modules that
+  /// is used to generate API documentation.
   let symbolGraphsDir: String
+
+  /// Directory path where generated Markdown documentation files will be written.
+  ///
+  /// Each module will generate a separate .md file in this directory.
   let outputDir: String
+
+  /// Optional set of module names to include in documentation generation.
+  ///
+  /// When nil, all public product modules will be documented. When specified,
+  /// only the modules in this set will be processed.
   let modules: Set<String>?
+
+  /// Whether to skip the build phase and use existing symbol graphs.
+  ///
+  /// When true, the script will not run `swift build` and will instead
+  /// attempt to generate documentation from symbol graphs that already exist
+  /// in the symbolGraphsDir.
   let generateOnly: Bool
+
+  /// Whether to display full build output from Swift compilation.
+  ///
+  /// When false (default), build output is captured and only shown on error.
+  /// When true, all build output is displayed in real-time.
   let verbose: Bool
+
+  /// Whether to continue documentation generation despite build failures.
+  ///
+  /// When true, if the Swift build fails, the script will attempt to generate
+  /// documentation from any existing symbol graphs instead of exiting with an error.
   let beLenient: Bool
+
+  /// Whether to include symbols that are re-exported from external modules.
+  ///
+  /// When false (default), symbols from external frameworks (via @_exported import)
+  /// are filtered out to focus on the package's own API. When true, these symbols
+  /// are included in the generated documentation.
   let includeReexported: Bool
 }
 
 // MARK: - CLI Argument Parsing
 
+/// Parses command line arguments and returns a configuration object.
+///
+/// - Returns: A Config object containing parsed settings, or nil if help was requested.
+///   The function handles both flags (like --verbose) and positional arguments
+///   (symbol graphs directory, output directory, modules list).
 func parseArguments() -> Config? {
   var config = Config.default
   var positionalArgs: [String] = []
@@ -123,6 +177,11 @@ func parseArguments() -> Config? {
   )
 }
 
+/// Prints usage information to standard output.
+///
+/// Displays the command line interface documentation including available flags,
+/// arguments, examples, and exit codes. This function is called when the user
+/// requests help with --help or -h flags.
 func printUsage() {
   print("""
   Usage: interfazzle.swift [FLAGS] [SYMBOL_GRAPHS_DIR] [OUTPUT_DIR] [MODULES]
@@ -158,6 +217,10 @@ func printUsage() {
 
 // MARK: - Orchestration Functions
 
+/// Validates that Package.swift exists in the current directory.
+///
+/// - Throws: An NSError with code 1 if Package.swift is not found in the current directory.
+///   This is the first validation step before attempting to generate documentation.
 func validatePackageSwift() throws {
   let fm = FileManager.default
   guard fm.fileExists(atPath: "./Package.swift") else {
@@ -174,6 +237,12 @@ func validatePackageSwift() throws {
   }
 }
 
+/// Extracts public module names from the Swift package description.
+///
+/// - Returns: An array of module names that are exposed as products in the package.
+///   This function runs `swift package describe --type json` to get the package
+///   information and extracts the target names from all products.
+/// - Throws: An NSError if the swift package describe command fails.
 func extractPublicModules() throws -> [String] {
   let process = Process()
   process.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
@@ -215,6 +284,16 @@ func extractPublicModules() throws -> [String] {
   return modules.sorted()
 }
 
+/// Builds symbol graphs for the Swift package.
+///
+/// - Parameters:
+///   - symbolGraphsDir: The directory where symbol graph files should be generated.
+///   - verbose: Whether to show full build output or suppress it (default behavior).
+///
+/// This function runs `swift build` with symbol graph generation flags and creates
+/// the output directory if needed. Build output is captured and only shown on error
+/// unless verbose mode is enabled.
+/// - Throws: An NSError with code 2 if the build fails with a non-zero exit status.
 func buildSymbolGraphs(symbolGraphsDir: String, verbose: Bool) throws {
   print("🔨 Building symbol graphs...")
 
@@ -280,114 +359,331 @@ func buildSymbolGraphs(symbolGraphsDir: String, verbose: Bool) throws {
 
 // MARK: - PackageDescription
 
+/// Represents the structure of a Swift package description.
+///
+/// This struct is used to parse the JSON output from `swift package describe --type json`
+/// and extract information about package targets and their file system locations.
 struct PackageDescription: Codable {
   // MARK: - Nested Types
 
+  /// Represents a build target within a Swift package.
+  ///
+  /// A target corresponds to a module that can be built as part of the package.
+  /// Each target has a name and a file system path where its source files are located.
   struct Target: Codable {
+    /// The name of the build target/module.
+    ///
+    /// This is the identifier used to reference the target within the package
+    /// and corresponds to the module name that can be imported in Swift code.
     let name: String
+
+    /// The relative file system path to the target's source directory.
+    ///
+    /// This path is relative to the package root and points to the directory
+    /// containing the target's Swift source files.
     let path: String
   }
 
   // MARK: - Properties
 
+  /// Array of all build targets defined in the package.
+  ///
+  /// This includes both library and executable targets that are part of the package.
   let targets: [Target]
 }
 
 // MARK: - SymbolGraph
 
+/// Represents a Swift symbol graph file structure.
+///
+/// Symbol graphs are JSON files generated by the Swift compiler that contain
+/// information about the symbols (types, functions, properties, etc.) in a module,
+/// their relationships, and documentation comments.
 struct SymbolGraph: Codable {
   // MARK: - Nested Types
 
+  /// Represents the module information in a symbol graph.
+  ///
+  /// This contains basic metadata about the Swift module that the symbol graph describes.
   struct Module: Codable {
+    /// The name of the module.
+    ///
+    /// This corresponds to the module name that can be imported in Swift code
+    /// and typically matches the target name in Package.swift.
     let name: String
   }
 
+  /// Represents a Swift symbol (type, function, property, etc.) in the symbol graph.
+  ///
+  /// This is the core data structure that contains all information about a particular
+  /// Swift symbol, including its declaration, documentation, and metadata.
   struct Symbol: Codable {
     // MARK: - Nested Types
 
+    /// Represents the kind of symbol (class, struct, function, etc.).
+    ///
+    /// The identifier follows a specific naming convention used by the Swift compiler
+    /// to categorize different types of symbols.
     struct Kind: Codable {
+      /// The machine-readable identifier for the symbol kind.
+      ///
+      /// Examples include "swift.class", "swift.struct", "swift.func", "swift.enum", etc.
       let identifier: String
+
+      /// The human-readable display name for the symbol kind.
+      ///
+      /// This is a more user-friendly representation of the symbol type.
       let displayName: String
     }
 
+    /// Represents a unique identifier for a symbol.
+    ///
+    /// This provides a way to uniquely reference symbols across different
+    /// symbol graphs and within relationships.
     struct Identifier: Codable {
+      /// The precise identifier that uniquely identifies this symbol.
+      ///
+      /// This is a mangled name that includes the full module path and symbol name,
+      /// used for precise symbol identification and relationship tracking.
       let precise: String
+
+      /// The interface language for this symbol.
+      ///
+      /// For Swift symbols, this is typically "swift". This allows symbol graphs
+      /// to potentially contain symbols from different languages.
       let interfaceLanguage: String
     }
 
+    /// Represents the various names associated with a symbol.
+    ///
+    /// This includes the primary title and any subheading information
+    /// that might be used for display purposes.
     struct Names: Codable {
+      /// The primary title/name of the symbol.
+      ///
+      /// This is the main name used to identify the symbol in documentation.
       let title: String
+
+      /// Optional subheading fragments for the symbol.
+      ///
+      /// This can contain additional type information or other context
+      /// that appears after the main symbol name.
       let subHeading: [DeclarationFragment]?
     }
 
+    /// Represents documentation comments associated with a symbol.
+    ///
+    /// This contains the structured documentation comments from the source code,
+    /// broken down into individual lines for processing.
     struct DocComment: Codable {
       // MARK: - Nested Types
 
+      /// Represents a single line of documentation comment.
+      ///
+      /// Each line is stored separately to preserve formatting and allow
+      /// for structured processing of documentation content.
       struct Line: Codable {
+        /// The text content of this documentation line.
+        ///
+        /// This contains the actual comment text from the source code.
         let text: String
       }
 
       // MARK: - Properties
 
+      /// Array of lines that make up the complete documentation comment.
+      ///
+      /// This preserves the original line-by-line structure of the documentation.
       let lines: [Line]
     }
 
+    /// Represents a fragment of a symbol's declaration.
+    ///
+    /// Declarations are broken down into fragments to allow for structured
+    /// processing and formatting of symbol signatures.
     struct DeclarationFragment: Codable {
+      /// The kind of declaration fragment.
+      ///
+      /// This indicates what type of token this fragment represents,
+      /// such as "keyword", "identifier", "text", "type", etc.
       let kind: String
+
+      /// The actual text/spelling of this declaration fragment.
+      ///
+      /// This contains the literal text that appears in the source code.
       let spelling: String
     }
 
+    /// Represents the signature of a function symbol.
+    ///
+    /// This contains detailed information about function parameters and return types,
+    /// broken down into structured declaration fragments.
     struct FunctionSignature: Codable {
       // MARK: - Nested Types
 
+      /// Represents a parameter in a function signature.
+      ///
+      /// This contains the parameter name and its type information
+      /// as declaration fragments for structured processing.
       struct Parameter: Codable {
+        /// The name of the parameter.
+        ///
+        /// This is the identifier used for the parameter in the function signature.
         let name: String
+
+        /// Declaration fragments describing the parameter's type.
+        ///
+        /// This contains the type information and any modifiers for the parameter,
+        /// broken down into structured fragments.
         let declarationFragments: [DeclarationFragment]?
       }
 
       // MARK: - Properties
 
+      /// Array of parameters for this function.
+      ///
+      /// This may be nil for functions that take no parameters.
       let parameters: [Parameter]?
+
+      /// Declaration fragments describing the return type.
+      ///
+      /// This contains the return type information broken down into fragments.
+      /// May be nil for functions without explicit return types (Void).
       let returns: [DeclarationFragment]?
     }
 
     // MARK: - Properties
 
+    /// The kind of symbol (class, struct, function, etc.).
+    ///
+    /// This determines how the symbol should be categorized and displayed.
     let kind: Kind
+
+    /// The unique identifier for this symbol.
+    ///
+    /// This is used to reference this symbol in relationships and for
+    /// cross-symbol graph references.
     let identifier: Identifier
+
+    /// The path components that form the symbol's full path.
+    ///
+    /// This represents the hierarchical path to the symbol, such as
+    /// ["MyClass", "myMethod"] for a method inside a class.
     let pathComponents: [String]
+
+    /// The names and display information for this symbol.
+    ///
+    /// This includes the title and any subheading information.
     let names: Names
+
+    /// Documentation comments associated with this symbol.
+    ///
+    /// This contains the structured documentation from the source code.
+    /// May be nil if the symbol has no documentation.
     let docComment: DocComment?
+
+    /// Declaration fragments that make up the symbol's signature.
+    ///
+    /// This provides the complete declaration broken down into structured tokens.
+    /// May be nil for some types of symbols.
     let declarationFragments: [DeclarationFragment]?
+
+    /// Function signature information for function symbols.
+    ///
+    /// This contains detailed parameter and return type information.
+    /// Only applicable to function/method symbols.
     let functionSignature: FunctionSignature?
+
+    /// The access level of this symbol.
+    ///
+    /// This indicates the visibility level (public, internal, private, etc.).
+    /// String value such as "public", "internal", "private", "fileprivate", "open".
     let accessLevel: String
   }
 
+  /// Represents a relationship between two symbols.
+  ///
+  /// This captures various types of relationships such as inheritance,
+  /// conformance, membership, and other connections between symbols.
   struct Relationship: Codable {
+    /// The kind of relationship.
+    ///
+    /// Examples include "inheritsFrom", "conformsTo", "memberOf", "overrideOf", etc.
     let kind: String
+
+    /// The precise identifier of the source symbol in this relationship.
+    ///
+    /// This refers to the symbol that is the source of the relationship.
     let source: String
+
+    /// The precise identifier of the target symbol in this relationship.
+    ///
+    /// This refers to the symbol that is the target of the relationship.
     let target: String
   }
 
   // MARK: - Properties
 
+  /// Information about the module this symbol graph describes.
+  ///
+  /// This contains the basic module metadata.
   let module: Module
+
+  /// Array of all symbols defined in this module.
+  ///
+  /// This includes all types, functions, properties, and other symbols
+  /// that are part of the module's public API.
   let symbols: [Symbol]
+
+  /// Array of relationships between symbols in this module.
+  ///
+  /// This captures inheritance hierarchies, protocol conformances,
+  /// type memberships, and other symbol relationships.
+  /// May be nil if no relationships are defined.
   let relationships: [Relationship]?
 }
 
 // MARK: - DocumentationGenerator
 
+/// Generates Markdown documentation from Swift symbol graph files.
+///
+/// This class is responsible for processing Swift symbol graphs and converting them
+/// into human-readable Markdown documentation. It handles symbol filtering, hierarchy
+/// organization, and proper formatting of the output documentation.
 class DocumentationGenerator {
   // MARK: - Properties
 
+  /// The directory containing symbol graph files to process.
+  ///
+  /// This directory should contain .symbols.json files generated by the Swift compiler.
   private let symbolGraphsDir: URL
+
+  /// The directory where generated Markdown documentation will be written.
+  ///
+  /// Each module will generate a separate .md file in this directory.
   private let outputDir: URL
+
+  /// Mapping of target names to their file system paths.
+  ///
+  /// This is used to locate README.md files within each target's directory
+  /// and include them in the generated documentation.
   private let targetPaths: [String: String] // target name -> path
+
+  /// Whether to include re-exported symbols in the documentation.
+  ///
+  /// When false, symbols from external modules are filtered out to focus
+  /// on the package's own API. When true, all symbols are included.
   private let includeReexported: Bool
 
   // MARK: - Lifecycle
 
+  /// Initializes a new DocumentationGenerator instance.
+  ///
+  /// - Parameters:
+  ///   - symbolGraphsDir: The directory containing symbol graph files.
+  ///   - outputDir: The directory where documentation will be written.
+  ///   - targetPaths: Mapping of target names to their source directory paths.
+  ///   - includeReexported: Whether to include re-exported symbols from external modules.
   init(symbolGraphsDir: URL, outputDir: URL, targetPaths: [String: String], includeReexported: Bool = false) {
     self.symbolGraphsDir = symbolGraphsDir
     self.outputDir = outputDir
@@ -397,6 +693,15 @@ class DocumentationGenerator {
 
   // MARK: - Functions
 
+  /// Generates documentation for all modules in the symbol graphs directory.
+  ///
+  /// This is the main entry point for documentation generation. It scans the symbol
+  /// graphs directory for module files and processes each one to create Markdown
+  /// documentation. Modules can be filtered using the includeOnly parameter.
+  ///
+  /// - Parameter includeOnly: Optional set of module names to process. If nil, all public
+  ///   product modules will be processed. This allows filtering to specific modules.
+  /// - Throws: Errors if the symbol graphs directory cannot be read or processing fails.
   func generate(includeOnly: Set<String>? = nil) throws {
     let fm = FileManager.default
 
@@ -420,7 +725,21 @@ class DocumentationGenerator {
     }
   }
 
-  /// Detects if a symbol is re-exported from another module
+  /// Detects if a symbol is re-exported from another module.
+  ///
+  /// This method filters out symbols that come from external frameworks through
+  /// @_exported import statements. It examines the precise identifiers to determine
+  /// if a symbol originates from outside the current module.
+  ///
+  /// - Parameter symbol: The symbol to check for re-export status.
+  /// - Returns: true if the symbol is re-exported and should be filtered out by default,
+  ///   false if it's a legitimate module symbol.
+  ///
+  /// This function identifies symbols that come from external frameworks through
+  /// @_exported import statements by examining their precise identifiers:
+  /// - Objective-C symbols (c:objc*)
+  /// - C symbols (c:*)
+  /// - Swift bridging symbols for Objective-C types (s:...So...)
   private func isReexportedSymbol(_ symbol: SymbolGraph.Symbol) -> Bool {
     /// Check for external module patterns in the precise identifier
     let preciseID = symbol.identifier.precise
@@ -443,6 +762,20 @@ class DocumentationGenerator {
     return false
   }
 
+  /// Processes a single module and generates its documentation.
+  ///
+  /// This method handles the complete processing of a single module, including
+  /// reading the main symbol graph file, loading any extension files, filtering
+  /// symbols, organizing them into a hierarchy, and generating the final documentation.
+  ///
+  /// - Parameters:
+  ///   - moduleName: The name of the module to process.
+  ///   - fileName: The filename of the module's symbol graph file.
+  /// - Throws: Errors if the symbol graph cannot be read or documentation generation fails.
+  ///
+  /// This method reads the main module symbol graph file and any extension files,
+  /// filters symbols based on access level and re-export status, then delegates
+  /// to generateModuleFile for the actual Markdown generation.
   private func processModule(moduleName: String, fileName: String) throws {
     print("Processing module: \(moduleName)")
 
@@ -535,6 +868,14 @@ class DocumentationGenerator {
     )
   }
 
+  /// Extracts a readable type name from a precise symbol identifier.
+  ///
+  /// This method attempts to demangle Swift symbol identifiers and map them to
+  /// human-readable type names. It handles Objective-C symbols, standard library types,
+  /// and uses swift-demangle for complex Swift symbols.
+  ///
+  /// - Parameter preciseIdentifier: The precise identifier from a symbol graph.
+  /// - Returns: A readable type name if extraction succeeds, nil otherwise.
   private func extractTypeName(from preciseIdentifier: String) -> String? {
     // Handle Objective-C symbols: c:objc(cs)ClassName or c:objc(pl)ProtocolName
     if preciseIdentifier.hasPrefix("c:objc(cs)") || preciseIdentifier.hasPrefix("c:objc(pl)") {
@@ -597,6 +938,16 @@ class DocumentationGenerator {
     return nil
   }
 
+  /// Extracts inheritance and conformance information for a symbol.
+  ///
+  /// This method analyzes the relationships for a symbol to find all parent classes
+  /// it inherits from and protocols it conforms to. It filters out common, noisy
+  /// conformances to keep the documentation focused on meaningful relationships.
+  ///
+  /// - Parameters:
+  ///   - symbol: The symbol to analyze for inheritance/conformance.
+  ///   - relationships: Array of relationships to search through.
+  /// - Returns: Array of type names that the symbol inherits from or conforms to.
   private func getInheritanceConformance(for symbol: SymbolGraph.Symbol,
                                          relationships: [SymbolGraph.Relationship]) -> [String]
   {
@@ -630,6 +981,17 @@ class DocumentationGenerator {
     return types.filter { seen.insert($0).inserted }
   }
 
+  /// Finds the main symbol that should appear first in documentation.
+  ///
+  /// This method identifies the most important symbol in a module that should
+  /// be highlighted first. It prioritizes symbols that are base classes in
+  /// inheritance hierarchies, or symbols whose names match the module name.
+  ///
+  /// - Parameters:
+  ///   - symbols: Array of symbols to search through.
+  ///   - relationships: Array of relationships to analyze inheritance.
+  ///   - moduleName: The name of the module being documented.
+  /// - Returns: The main symbol if one is identified, nil otherwise.
   private func findMainSymbol(symbols: [SymbolGraph.Symbol],
                               relationships: [SymbolGraph.Relationship],
                               moduleName: String) -> SymbolGraph.Symbol?
@@ -664,6 +1026,16 @@ class DocumentationGenerator {
     return nil
   }
 
+  /// Builds a dependency graph showing relationships between symbols.
+  ///
+  /// This method analyzes symbol relationships to create a dependency graph where
+  /// each symbol points to the symbols it depends on. This is used for topological
+  /// sorting to ensure dependencies are documented before dependent symbols.
+  ///
+  /// - Parameters:
+  ///   - symbols: Array of symbols to include in the graph.
+  ///   - relationships: Array of relationships to analyze.
+  /// - Returns: Dictionary mapping symbol IDs to sets of dependency symbol IDs.
   private func buildDependencyGraph(symbols: [SymbolGraph.Symbol],
                                     relationships: [SymbolGraph.Relationship]) -> [String: Set<String>]
   {
@@ -692,6 +1064,16 @@ class DocumentationGenerator {
     return dependencies
   }
 
+  /// Performs topological sort on symbols based on their dependencies.
+  ///
+  /// This method sorts symbols so that dependencies appear before the symbols
+  /// that depend on them. This ensures proper documentation order where base
+  /// classes and protocols are documented before their subclasses/conformers.
+  ///
+  /// - Parameters:
+  ///   - symbols: Array of symbols to sort.
+  ///   - dependencies: Dependency graph mapping symbol IDs to their dependencies.
+  /// - Returns: Array of symbols sorted in dependency order.
   private func topologicalSort(symbols: [SymbolGraph.Symbol],
                                dependencies: [String: Set<String>]) -> [SymbolGraph.Symbol]
   {
@@ -728,6 +1110,14 @@ class DocumentationGenerator {
     return sortedSymbols
   }
 
+  /// Determines the hierarchy rank for a symbol kind identifier.
+  ///
+  /// This method assigns a numeric rank to different symbol types to establish
+  /// a documentation hierarchy. Lower ranks appear first in the documentation.
+  /// The hierarchy is: Classes → Structs → Enums → Protocols → Extensions → Macros → Functions.
+  ///
+  /// - Parameter kindIdentifier: The kind identifier from a symbol graph.
+  /// - Returns: Integer rank where lower numbers indicate higher priority in documentation.
   private func getTypeHierarchyRank(_ kindIdentifier: String) -> Int {
     // Define hierarchy: Classes (1) → Structs (2) → Enums (3) → Protocols (4) → Extensions (5) → Macros (6) → Functions
     // (7)
@@ -751,6 +1141,16 @@ class DocumentationGenerator {
     }
   }
 
+  /// Sorts symbols by dependency order and type hierarchy.
+  ///
+  /// This method combines topological sorting (for dependencies) with hierarchical
+  /// sorting (by symbol type) to produce an optimal documentation order. Dependencies
+  /// are documented first, then symbols are grouped by type hierarchy.
+  ///
+  /// - Parameters:
+  ///   - symbols: Array of symbols to sort.
+  ///   - dependencies: Dependency graph for the symbols.
+  /// - Returns: Array of symbols sorted by dependencies and then by type hierarchy.
   private func sortSymbolsByHierarchy(symbols: [SymbolGraph.Symbol],
                                       dependencies: [String: Set<String>]) -> [SymbolGraph.Symbol]
   {
@@ -1135,6 +1535,14 @@ class DocumentationGenerator {
 
 // MARK: - Helper Functions
 
+/// Adjusts heading levels in markdown content to fit within documentation hierarchy.
+///
+/// This function ensures that markdown headings are properly nested within the
+/// generated documentation by shifting all heading levels so the highest level
+/// becomes H3 (to fit under the main module H2 heading).
+///
+/// - Parameter markdown: The markdown content to adjust.
+/// - Returns: Markdown with adjusted heading levels.
 func adjustHeadingLevels(in markdown: String) -> String {
   let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false)
 
@@ -1196,6 +1604,14 @@ func adjustHeadingLevels(in markdown: String) -> String {
   return result.joined(separator: "\n")
 }
 
+/// Loads package description and extracts target path information.
+///
+/// This function runs `swift package describe --type json` to get information
+/// about the package targets and their file system locations. The returned
+/// mapping is used to locate README.md files within each target directory.
+///
+/// - Returns: Dictionary mapping target names to their relative file system paths.
+/// - Throws: NSError if the swift package describe command fails.
 func loadPackageDescription() throws -> [String: String] {
   let process = Process()
   process.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
@@ -1230,6 +1646,16 @@ func loadPackageDescription() throws -> [String: String] {
 
 // MARK: - Main Entry Point
 
+/// Main entry point for the interfazzle documentation generator.
+///
+/// This function orchestrates the entire documentation generation process:
+/// 1. Parses command line arguments
+/// 2. Validates the Swift package environment
+/// 3. Builds symbol graphs (unless --generate-only is specified)
+/// 4. Generates Markdown documentation for the specified modules
+///
+/// The function handles various error conditions and provides appropriate
+/// exit codes for different failure scenarios.
 func main() {
   do {
     // Parse arguments
