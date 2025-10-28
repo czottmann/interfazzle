@@ -1,4 +1,5 @@
 import Foundation
+@_exported import OSLog
 
 /// A concrete implementation of ExampleProtocol
 public class ExampleClass: ExampleProtocol {

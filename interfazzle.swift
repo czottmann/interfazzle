@@ -13,7 +13,8 @@ struct Config {
     modules: nil,
     generateOnly: false,
     verbose: false,
-    beLenient: false
+    beLenient: false,
+    includeReexported: false
   )
 
   // MARK: - Properties
@@ -24,6 +25,7 @@ struct Config {
   let generateOnly: Bool
   let verbose: Bool
   let beLenient: Bool
+  let includeReexported: Bool
 }
 
 // MARK: - CLI Argument Parsing
@@ -44,7 +46,8 @@ func parseArguments() -> Config? {
           modules: config.modules,
           generateOnly: true,
           verbose: config.verbose,
-          beLenient: config.beLenient
+          beLenient: config.beLenient,
+          includeReexported: config.includeReexported
         )
 
       case "--verbose":
@@ -54,7 +57,8 @@ func parseArguments() -> Config? {
           modules: config.modules,
           generateOnly: config.generateOnly,
           verbose: true,
-          beLenient: config.beLenient
+          beLenient: config.beLenient,
+          includeReexported: config.includeReexported
         )
 
       case "--be-lenient":
@@ -64,7 +68,19 @@ func parseArguments() -> Config? {
           modules: config.modules,
           generateOnly: config.generateOnly,
           verbose: config.verbose,
-          beLenient: true
+          beLenient: true,
+          includeReexported: config.includeReexported
+        )
+
+      case "--include-reexported":
+        config = Config(
+          symbolGraphsDir: config.symbolGraphsDir,
+          outputDir: config.outputDir,
+          modules: config.modules,
+          generateOnly: config.generateOnly,
+          verbose: config.verbose,
+          beLenient: config.beLenient,
+          includeReexported: true
         )
 
       case "--help",
@@ -102,7 +118,8 @@ func parseArguments() -> Config? {
     modules: modules,
     generateOnly: config.generateOnly,
     verbose: config.verbose,
-    beLenient: config.beLenient
+    beLenient: config.beLenient,
+    includeReexported: config.includeReexported
   )
 }
 
@@ -113,10 +130,11 @@ func printUsage() {
   Generate API documentation from Swift symbol graphs.
 
   FLAGS:
-    --generate-only  Skip build phase, use existing symbol graphs
-    --verbose        Show full swift build output
-    --be-lenient     On build failure, try generating from existing graphs
-    --help, -h       Show this help message
+    --generate-only      Skip build phase, use existing symbol graphs
+    --verbose            Show full swift build output
+    --be-lenient         On build failure, try generating from existing graphs
+    --include-reexported Include re-exported symbols in documentation
+    --help, -h           Show this help message
 
   ARGUMENTS (all optional):
     SYMBOL_GRAPHS_DIR  Directory for symbol graphs (default: .build/symbol-graphs)
@@ -366,13 +384,15 @@ class DocumentationGenerator {
   private let symbolGraphsDir: URL
   private let outputDir: URL
   private let targetPaths: [String: String] // target name -> path
+  private let includeReexported: Bool
 
   // MARK: - Lifecycle
 
-  init(symbolGraphsDir: URL, outputDir: URL, targetPaths: [String: String]) {
+  init(symbolGraphsDir: URL, outputDir: URL, targetPaths: [String: String], includeReexported: Bool = false) {
     self.symbolGraphsDir = symbolGraphsDir
     self.outputDir = outputDir
     self.targetPaths = targetPaths
+    self.includeReexported = includeReexported
   }
 
   // MARK: - Functions
@@ -398,6 +418,29 @@ class DocumentationGenerator {
 
       try processModule(moduleName: moduleName, fileName: file)
     }
+  }
+
+  /// Detects if a symbol is re-exported from another module
+  private func isReexportedSymbol(_ symbol: SymbolGraph.Symbol) -> Bool {
+    // Check for external module patterns in the precise identifier
+    let preciseID = symbol.identifier.precise
+
+    // Objective-C symbols (c:objc) are typically re-exported from Apple frameworks
+    if preciseID.hasPrefix("c:objc") {
+      return true
+    }
+
+    // C symbols (c:) - exclude C enums which start with c:@E@
+    if preciseID.hasPrefix("c:"), !preciseID.hasPrefix("c:@E@") {
+      return true
+    }
+
+    // Swift bridging symbols for Objective-C types (So*) that come from re-exports
+    if preciseID.hasPrefix("So"), !preciseID.contains("Example") {
+      return true
+    }
+
+    return false
   }
 
   private func processModule(moduleName: String, fileName: String) throws {
@@ -428,9 +471,11 @@ class DocumentationGenerator {
     }
 
     // Filter to public API symbols (public and open) and exclude synthesized ones
+    // Also filter out re-exported symbols unless explicitly included
     let publicSymbols = allSymbols.filter {
       ($0.accessLevel == "public" || $0.accessLevel == "open") &&
-        !$0.identifier.precise.contains("::SYNTHESIZED::")
+        !$0.identifier.precise.contains("::SYNTHESIZED::") &&
+        (includeReexported || !isReexportedSymbol($0))
     }
 
     // Group symbols by type and nesting
@@ -1250,7 +1295,8 @@ func main() {
     let generator = DocumentationGenerator(
       symbolGraphsDir: symbolGraphsURL,
       outputDir: outputURL,
-      targetPaths: targetPaths
+      targetPaths: targetPaths,
+      includeReexported: config.includeReexported
     )
 
     try generator.generate(includeOnly: modulesToDocument)
