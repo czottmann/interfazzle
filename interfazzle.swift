@@ -153,7 +153,7 @@ func parseArguments() -> Config? {
     i += 1
   }
 
-  // Process positional arguments
+  /// Process positional arguments
   if positionalArgs.count > 3 {
     print("❌ Error: Too many arguments")
     printUsage()
@@ -275,7 +275,7 @@ func extractPublicModules() throws -> [String] {
 
   let packageInfo = try JSONDecoder().decode(PackageInfo.self, from: data)
 
-  // Get all unique targets from products (these are the public modules)
+  /// Get all unique targets from products (these are the public modules)
   var modules = Set<String>()
   for product in packageInfo.products {
     modules.formUnion(product.targets)
@@ -297,7 +297,7 @@ func extractPublicModules() throws -> [String] {
 func buildSymbolGraphs(symbolGraphsDir: String, verbose: Bool) throws {
   print("🔨 Building symbol graphs...")
 
-  // Create directory if needed
+  /// Create directory if needed
   let fm = FileManager.default
   try fm.createDirectory(atPath: symbolGraphsDir, withIntermediateDirectories: true)
 
@@ -311,12 +311,12 @@ func buildSymbolGraphs(symbolGraphsDir: String, verbose: Bool) throws {
   ]
 
   if verbose {
-    // Stream output in real-time
+    /// Stream output in real-time
     try process.run()
     process.waitUntilExit()
   }
   else {
-    // Capture output, only show on error
+    /// Capture output, only show on error
     let outputPipe = Pipe()
     let errorPipe = Pipe()
     process.standardOutput = outputPipe
@@ -710,13 +710,13 @@ class DocumentationGenerator {
       return
     }
 
-    // Process only main module files (not @Module.symbols.json)
+    /// Process only main module files (not @Module.symbols.json)
     let mainFiles = files.filter { $0.hasSuffix(".symbols.json") && !$0.contains("@") }
 
     for file in mainFiles {
       let moduleName = file.replacingOccurrences(of: ".symbols.json", with: "")
 
-      // Filter to included modules if specified
+      /// Filter to included modules if specified
       if let includeOnly, !includeOnly.contains(moduleName) {
         continue
       }
@@ -749,7 +749,7 @@ class DocumentationGenerator {
       return true
     }
 
-    // C symbols (c:) - these are typically re-exported from C frameworks
+    /// C symbols (c:) - these are typically re-exported from C frameworks
     if preciseID.hasPrefix("c:") {
       return true
     }
@@ -877,13 +877,13 @@ class DocumentationGenerator {
   /// - Parameter preciseIdentifier: The precise identifier from a symbol graph.
   /// - Returns: A readable type name if extraction succeeds, nil otherwise.
   private func extractTypeName(from preciseIdentifier: String) -> String? {
-    // Handle Objective-C symbols: c:objc(cs)ClassName or c:objc(pl)ProtocolName
+    /// Handle Objective-C symbols: c:objc(cs)ClassName or c:objc(pl)ProtocolName
     if preciseIdentifier.hasPrefix("c:objc(cs)") || preciseIdentifier.hasPrefix("c:objc(pl)") {
       let parts = preciseIdentifier.components(separatedBy: ")")
       return parts.last
     }
 
-    // Handle common Swift standard library types
+    /// Handle common Swift standard library types
     let swiftStdLibMap: [String: String] = [
       "s:SH": "Hashable",
       "s:SQ": "Equatable",
@@ -900,9 +900,9 @@ class DocumentationGenerator {
       return mapped
     }
 
-    // For Swift symbols, use swift-demangle to get the proper name
+    /// For Swift symbols, use swift-demangle to get the proper name
     if preciseIdentifier.hasPrefix("s:") {
-      // Convert to mangled format that swift-demangle expects (replace "s:" with "$s")
+      /// Convert to mangled format that swift-demangle expects (replace "s:" with "$s")
       let mangled = "$s" + preciseIdentifier.dropFirst(2)
 
       let process = Process()
@@ -919,10 +919,10 @@ class DocumentationGenerator {
         process.waitUntilExit()
 
         if let demangled = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
-          // Output format: "$sMANGLED ---> Module.TypeName"
+          /// Output format: "$sMANGLED ---> Module.TypeName"
           if let arrowRange = demangled.range(of: " ---> ") {
             let fullName = String(demangled[arrowRange.upperBound...])
-            // Extract just the type name (last component after last dot)
+            /// Extract just the type name (last component after last dot)
             if let lastDot = fullName.lastIndex(of: ".") {
               return String(fullName[fullName.index(after: lastDot)...])
             }
@@ -931,7 +931,7 @@ class DocumentationGenerator {
         }
       }
       catch {
-        // Fall through to return nil
+        /// Fall through to return nil
       }
     }
 
@@ -954,14 +954,14 @@ class DocumentationGenerator {
     let sourceID = symbol.identifier.precise
     var types: [String] = []
 
-    // Find all inheritsFrom and conformsTo relationships
+    /// Find all inheritsFrom and conformsTo relationships
     let relevantRelationships = relationships.filter {
       $0.source == sourceID && ($0.kind == "inheritsFrom" || $0.kind == "conformsTo")
     }
 
     for relationship in relevantRelationships {
       if let typeName = extractTypeName(from: relationship.target) {
-        // Skip compiler-synthesized or inherited conformances that clutter the output
+        /// Skip compiler-synthesized or inherited conformances that clutter the output
         let skipTypes = [
           "CVarArg",
           "Hashable",
@@ -976,7 +976,7 @@ class DocumentationGenerator {
       }
     }
 
-    // Deduplicate while preserving order (inheritance first, then conformances)
+    /// Deduplicate while preserving order (inheritance first, then conformances)
     var seen = Set<String>()
     return types.filter { seen.insert($0).inserted }
   }
@@ -996,29 +996,29 @@ class DocumentationGenerator {
                               relationships: [SymbolGraph.Relationship],
                               moduleName: String) -> SymbolGraph.Symbol?
   {
-    // Build a map of symbol IDs to symbols for quick lookup
+    /// Build a map of symbol IDs to symbols for quick lookup
     let symbolsByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.identifier.precise, $0) })
 
-    // First priority: Find inheritance hierarchy - look for base classes/structs that others inherit from
+    /// First priority: Find inheritance hierarchy - look for base classes/structs that others inherit from
     var inheritanceCounts: [String: Int] = [:]
     for relationship in relationships {
       if relationship.kind == "inheritsFrom" {
         let targetID = relationship.target
-        // Check if the target is one of our symbols
+        /// Check if the target is one of our symbols
         if symbolsByID[targetID] != nil {
           inheritanceCounts[targetID, default: 0] += 1
         }
       }
     }
 
-    // Find the symbol with the most inheritors
+    /// Find the symbol with the most inheritors
     if let mostInheritedID = inheritanceCounts.max(by: { $0.value < $1.value })?.key,
        let mostInheritedSymbol = symbolsByID[mostInheritedID]
     {
       return mostInheritedSymbol
     }
 
-    // Second priority: Look for symbol with name matching the module name
+    /// Second priority: Look for symbol with name matching the module name
     if let moduleMatchingSymbol = symbols.first(where: { $0.names.title == moduleName }) {
       return moduleMatchingSymbol
     }
@@ -1039,21 +1039,21 @@ class DocumentationGenerator {
   private func buildDependencyGraph(symbols: [SymbolGraph.Symbol],
                                     relationships: [SymbolGraph.Relationship]) -> [String: Set<String>]
   {
-    // Build a map of symbol IDs to their dependencies
+    /// Build a map of symbol IDs to their dependencies
     var dependencies: [String: Set<String>] = [:]
     let symbolsByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.identifier.precise, $0) })
 
-    // Initialize empty dependencies for all symbols
+    /// Initialize empty dependencies for all symbols
     for symbol in symbols {
       dependencies[symbol.identifier.precise] = Set<String>()
     }
 
-    // Analyze relationships to build dependencies
+    /// Analyze relationships to build dependencies
     for relationship in relationships {
       let sourceID = relationship.source
       let targetID = relationship.target
 
-      // If both source and target are in our symbols, source depends on target
+      /// If both source and target are in our symbols, source depends on target
       if symbolsByID[sourceID] != nil,
          symbolsByID[targetID] != nil
       {
@@ -1081,7 +1081,7 @@ class DocumentationGenerator {
     var processedIDs = Set<String>()
     var sortedSymbols: [SymbolGraph.Symbol] = []
 
-    // Iteratively find symbols with no unprocessed dependencies
+    /// Iteratively find symbols with no unprocessed dependencies
     while !remainingSymbols.isEmpty {
       var foundSymbol = false
 
@@ -1089,7 +1089,7 @@ class DocumentationGenerator {
         let symbolID = symbol.identifier.precise
         let symbolDeps = dependencies[symbolID] ?? Set<String>()
 
-        // Check if all dependencies have been processed
+        /// Check if all dependencies have been processed
         if symbolDeps.isSubset(of: processedIDs) {
           sortedSymbols.append(symbol)
           processedIDs.insert(symbolID)
@@ -1099,9 +1099,9 @@ class DocumentationGenerator {
         }
       }
 
-      // If we couldn't find a symbol with no dependencies, we have a cycle
+      /// If we couldn't find a symbol with no dependencies, we have a cycle
       if !foundSymbol {
-        // Add remaining symbols in their original order to break the cycle
+        /// Add remaining symbols in their original order to break the cycle
         sortedSymbols.append(contentsOf: remainingSymbols)
         break
       }
@@ -1119,8 +1119,9 @@ class DocumentationGenerator {
   /// - Parameter kindIdentifier: The kind identifier from a symbol graph.
   /// - Returns: Integer rank where lower numbers indicate higher priority in documentation.
   private func getTypeHierarchyRank(_ kindIdentifier: String) -> Int {
-    // Define hierarchy: Classes (1) → Structs (2) → Enums (3) → Protocols (4) → Extensions (5) → Macros (6) → Functions
-    // (7)
+    /// Define hierarchy: Classes (1) → Structs (2) → Enums (3) → Protocols (4) → Extensions (5) → Macros (6) →
+    /// Functions
+    /// (7)
     switch kindIdentifier {
       case "swift.class":
         1
@@ -1154,15 +1155,15 @@ class DocumentationGenerator {
   private func sortSymbolsByHierarchy(symbols: [SymbolGraph.Symbol],
                                       dependencies: [String: Set<String>]) -> [SymbolGraph.Symbol]
   {
-    // First, sort by dependencies using topological sort
+    /// First, sort by dependencies using topological sort
     let dependencySorted = topologicalSort(symbols: symbols, dependencies: dependencies)
 
-    // Then, group by type hierarchy while preserving dependency order where possible
+    /// Then, group by type hierarchy while preserving dependency order where possible
     let grouped = Dictionary(grouping: dependencySorted) { symbol in
       getTypeHierarchyRank(symbol.kind.identifier)
     }
 
-    // Sort groups by hierarchy rank and flatten
+    /// Sort groups by hierarchy rank and flatten
     let sortedRanks = grouped.keys.sorted()
     return sortedRanks.flatMap { grouped[$0]?.sorted(by: { $0.names.title < $1.names.title }) ?? [] }
   }
@@ -1174,18 +1175,18 @@ class DocumentationGenerator {
   {
     var markdown = "## Module `\(moduleName)`\n\n"
 
-    // Check for module README.md and include it if found
+    /// Check for module README.md and include it if found
     if let modulePath = targetPaths[moduleName] {
       let readmePath = URL(fileURLWithPath: modulePath).appendingPathComponent("README.md")
       if FileManager.default.fileExists(atPath: readmePath.path) {
         do {
           let readmeContent = try String(contentsOf: readmePath, encoding: .utf8)
-          // Remove the title if it matches the module name (avoid duplication)
+          /// Remove the title if it matches the module name (avoid duplication)
           var processedContent = readmeContent
           if let firstLine = readmeContent.split(separator: "\n", maxSplits: 1).first,
              firstLine.trimmingCharacters(in: .whitespaces) == "# \(moduleName)"
           {
-            // Skip the first line and any blank lines after it
+            /// Skip the first line and any blank lines after it
             let lines = readmeContent.split(separator: "\n", omittingEmptySubsequences: false)
             if lines.count > 1 {
               processedContent = lines.dropFirst().joined(separator: "\n")
@@ -1193,7 +1194,7 @@ class DocumentationGenerator {
             }
           }
 
-          // Adjust heading levels so the highest heading becomes H3
+          /// Adjust heading levels so the highest heading becomes H3
           processedContent = adjustHeadingLevels(in: processedContent)
 
           markdown += processedContent.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n"
@@ -1204,16 +1205,16 @@ class DocumentationGenerator {
       }
     }
 
-    // Build dependency graph for hierarchy-based sorting
+    /// Build dependency graph for hierarchy-based sorting
     let dependencies = buildDependencyGraph(symbols: symbols, relationships: relationships)
 
-    // Find the main symbol (if any) that should appear first
+    /// Find the main symbol (if any) that should appear first
     let mainSymbol = findMainSymbol(symbols: symbols, relationships: relationships, moduleName: moduleName)
 
-    // Sort symbols by hierarchy (dependencies first, then by type hierarchy)
+    /// Sort symbols by hierarchy (dependencies first, then by type hierarchy)
     let hierarchySortedSymbols = sortSymbolsByHierarchy(symbols: symbols, dependencies: dependencies)
 
-    // Separate main symbol from the rest if found
+    /// Separate main symbol from the rest if found
     var orderedSymbols: [SymbolGraph.Symbol] = []
     var remainingSymbols: [SymbolGraph.Symbol] = []
 
@@ -1225,7 +1226,7 @@ class DocumentationGenerator {
       remainingSymbols = hierarchySortedSymbols
     }
 
-    // Add public interface heading before first code block
+    /// Add public interface heading before first code block
     var hasAddedHeading = false
     func writeInterfaceBlock(_ symbols: [SymbolGraph.Symbol]) {
       if symbols.isEmpty {
@@ -1252,15 +1253,15 @@ class DocumentationGenerator {
       markdown += "```\n\n"
     }
 
-    // Write main symbol first if found
+    /// Write main symbol first if found
     if !orderedSymbols.isEmpty {
       writeInterfaceBlock(orderedSymbols)
     }
 
-    // Write remaining symbols
+    /// Write remaining symbols
     writeInterfaceBlock(remainingSymbols)
 
-    // Write extension groups (extensions to external types) with hierarchy-based ordering
+    /// Write extension groups (extensions to external types) with hierarchy-based ordering
     if !extensionGroups.isEmpty {
       if !hasAddedHeading {
         markdown += "### Public interface\n\n"
@@ -1269,22 +1270,22 @@ class DocumentationGenerator {
 
       markdown += "```swift\n"
 
-      // Sort extension groups using the same hierarchy logic
+      /// Sort extension groups using the same hierarchy logic
       var sortedExtensionGroups: [(String, [SymbolGraph.Symbol])] = []
 
       for (extendedType, methods) in extensionGroups {
-        // Build dependencies for extension methods
+        /// Build dependencies for extension methods
         let extDependencies = buildDependencyGraph(symbols: methods, relationships: relationships)
-        // Sort methods by hierarchy
+        /// Sort methods by hierarchy
         let sortedMethods = sortSymbolsByHierarchy(symbols: methods, dependencies: extDependencies)
         sortedExtensionGroups.append((extendedType, sortedMethods))
       }
 
-      // Sort extension groups by extended type name
+      /// Sort extension groups by extended type name
       sortedExtensionGroups.sort { $0.0 < $1.0 }
 
       for (index, (extendedType, methods)) in sortedExtensionGroups.enumerated() {
-        // Only generate extension if it has members after filtering
+        /// Only generate extension if it has members after filtering
         if !methods.isEmpty {
           if index > 0 {
             markdown += "\n"
@@ -1295,7 +1296,7 @@ class DocumentationGenerator {
       markdown += "```\n\n"
     }
 
-    // Add timestamp at the bottom
+    /// Add timestamp at the bottom
     let dateFormatter = DateFormatter()
     dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
     let timestamp = dateFormatter.string(from: Date())
@@ -1307,14 +1308,14 @@ class DocumentationGenerator {
   }
 
   private func formatDeclaration(fragments: [SymbolGraph.Symbol.DeclarationFragment], addPublic: Bool) -> String {
-    // Filter out unwanted keywords/attributes
+    /// Filter out unwanted keywords/attributes
     let filtered = fragments.filter {
       !["nonisolated", "@MainActor"].contains($0.spelling.trimmingCharacters(in: .whitespaces))
     }
 
     var declaration = filtered.map(\.spelling).joined()
 
-    // Add public modifier if needed and not already present
+    /// Add public modifier if needed and not already present
     if addPublic, !declaration.hasPrefix("public") {
       declaration = "public " + declaration
     }
@@ -1334,7 +1335,7 @@ class DocumentationGenerator {
       let text = line.text
       let trimmed = text.trimmingCharacters(in: .whitespaces)
 
-      // Skip parameters section as we'll show them inline in declarations
+      /// Skip parameters section as we'll show them inline in declarations
       if trimmed.hasPrefix("- Parameters:") || trimmed.hasPrefix("-Parameters:") {
         inParametersSection = true
         continue
@@ -1342,11 +1343,11 @@ class DocumentationGenerator {
 
       if inParametersSection {
         if trimmed.hasPrefix("-"), !trimmed.contains(":") {
-          // New section, end parameters
+          /// New section, end parameters
           inParametersSection = false
         }
         else {
-          // Skip parameter details
+          /// Skip parameter details
           continue
         }
       }
@@ -1366,15 +1367,15 @@ class DocumentationGenerator {
   {
     var result = ""
 
-    // Add doc comment for the type
+    /// Add doc comment for the type
     result += formatDocComment(symbol.docComment, indent: indent)
 
-    // Type declaration
+    /// Type declaration
     if let fragments = symbol.declarationFragments {
       var declaration = formatDeclaration(fragments: fragments, addPublic: true)
 
-      // Add inheritance/conformance for classes, structs, and enums only
-      // Protocols already include inheritance in their declaration fragments
+      /// Add inheritance/conformance for classes, structs, and enums only
+      /// Protocols already include inheritance in their declaration fragments
       let needsInheritance = ["swift.class", "swift.struct", "swift.enum"].contains(symbol.kind.identifier)
       if needsInheritance {
         let inherited = getInheritanceConformance(for: symbol, relationships: relationships)
@@ -1383,7 +1384,7 @@ class DocumentationGenerator {
         }
       }
 
-      // For standalone functions/macros, just add the declaration
+      /// For standalone functions/macros, just add the declaration
       if symbol.kind.identifier == "swift.func" || symbol.kind.identifier == "swift.macro" {
         result += "\(indent)\(declaration)\n"
         return result
@@ -1392,14 +1393,14 @@ class DocumentationGenerator {
       result += "\(indent)\(declaration) {\n"
     }
 
-    // Get direct children only (path length = current path length + 1)
+    /// Get direct children only (path length = current path length + 1)
     let currentPathLength = symbol.pathComponents.count
     let directChildren = allSymbolsByPath.values.filter { child in
       child.pathComponents.count == currentPathLength + 1 &&
         child.pathComponents.prefix(currentPathLength) == symbol.pathComponents[...]
     }
 
-    // Separate nested types from members
+    /// Separate nested types from members
     let nestedTypes = directChildren.filter {
       ["swift.struct", "swift.class", "swift.enum", "swift.protocol"].contains($0.kind.identifier)
     }
@@ -1407,7 +1408,7 @@ class DocumentationGenerator {
       !nestedTypes.contains { $0.pathComponents == member.pathComponents }
     }
 
-    // Group members by kind
+    /// Group members by kind
     let typeProperties = members.filter { $0.kind.identifier.contains("type.property") }
     let typeMethods = members.filter { $0.kind.identifier.contains("type.method") }
     let properties = members.filter {
@@ -1422,7 +1423,7 @@ class DocumentationGenerator {
     let memberIndent = indent + "  "
     var hasContent = false
 
-    // Render nested types first
+    /// Render nested types first
     for nestedType in nestedTypes.sorted(by: { $0.names.title < $1.names.title }) {
       if hasContent {
         result += "\n"
@@ -1436,7 +1437,7 @@ class DocumentationGenerator {
       hasContent = true
     }
 
-    // Render type properties
+    /// Render type properties
     for prop in typeProperties.sorted(by: { $0.names.title < $1.names.title }) {
       if hasContent {
         result += "\n"
@@ -1449,7 +1450,7 @@ class DocumentationGenerator {
       hasContent = true
     }
 
-    // Render instance properties
+    /// Render instance properties
     for prop in properties.sorted(by: { $0.names.title < $1.names.title }) {
       if hasContent {
         result += "\n"
@@ -1462,7 +1463,7 @@ class DocumentationGenerator {
       hasContent = true
     }
 
-    // Render enum cases
+    /// Render enum cases
     for enumCase in enumCases.sorted(by: { $0.names.title < $1.names.title }) {
       if hasContent {
         result += "\n"
@@ -1475,7 +1476,7 @@ class DocumentationGenerator {
       hasContent = true
     }
 
-    // Render type methods
+    /// Render type methods
     for method in typeMethods.sorted(by: { $0.names.title < $1.names.title }) {
       if hasContent {
         result += "\n"
@@ -1488,7 +1489,7 @@ class DocumentationGenerator {
       hasContent = true
     }
 
-    // Render instance methods
+    /// Render instance methods
     for method in methods.sorted(by: { $0.names.title < $1.names.title }) {
       if hasContent {
         result += "\n"
@@ -1510,7 +1511,7 @@ class DocumentationGenerator {
 
     result += "extension \(extendedType) {\n"
 
-    // Group by kind
+    /// Group by kind
     let properties = methods.filter { $0.kind.identifier.contains("property") }
     let functions = methods.filter { $0.kind.identifier.contains("method") || $0.kind.identifier.contains("func") }
 
@@ -1546,15 +1547,15 @@ class DocumentationGenerator {
 func adjustHeadingLevels(in markdown: String) -> String {
   let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false)
 
-  // Find the minimum heading level (highest priority heading)
+  /// Find the minimum heading level (highest priority heading)
   var minLevel: Int?
   for line in lines {
     let trimmed = line.trimmingCharacters(in: .whitespaces)
     if trimmed.hasPrefix("#") {
-      // Count the number of # characters
+      /// Count the number of # characters
       let hashCount = trimmed.prefix(while: { $0 == "#" }).count
       if hashCount > 0, hashCount <= 6 {
-        // Make sure there's a space after the hashes (valid markdown heading)
+        /// Make sure there's a space after the hashes (valid markdown heading)
         if trimmed.count > hashCount, trimmed[trimmed.index(trimmed.startIndex, offsetBy: hashCount)] == " " {
           if let current = minLevel {
             minLevel = min(current, hashCount)
@@ -1567,28 +1568,28 @@ func adjustHeadingLevels(in markdown: String) -> String {
     }
   }
 
-  // If no headings found, return original
+  /// If no headings found, return original
   guard let minLevel else {
     return markdown
   }
 
-  // Calculate shift needed to make minLevel become level 3 (H3)
+  /// Calculate shift needed to make minLevel become level 3 (H3)
   let targetLevel = 3
   let shift = targetLevel - minLevel
 
-  // If no shift needed, return original
+  /// If no shift needed, return original
   if shift == 0 {
     return markdown
   }
 
-  // Apply shift to all headings
+  /// Apply shift to all headings
   var result: [String] = []
   for line in lines {
     let trimmed = line.trimmingCharacters(in: .whitespaces)
     if trimmed.hasPrefix("#") {
       let hashCount = trimmed.prefix(while: { $0 == "#" }).count
       if hashCount > 0, hashCount <= 6 {
-        // Check for valid heading (space after hashes)
+        /// Check for valid heading (space after hashes)
         if trimmed.count > hashCount, trimmed[trimmed.index(trimmed.startIndex, offsetBy: hashCount)] == " " {
           let newLevel = min(hashCount + shift, 6) // Cap at H6
           let newHashes = String(repeating: "#", count: newLevel)
@@ -1635,7 +1636,7 @@ func loadPackageDescription() throws -> [String: String] {
   let data = pipe.fileHandleForReading.readDataToEndOfFile()
   let packageDesc = try JSONDecoder().decode(PackageDescription.self, from: data)
 
-  // Build a dictionary of target name -> path
+  /// Build a dictionary of target name -> path
   var targetPaths: [String: String] = [:]
   for target in packageDesc.targets {
     targetPaths[target.name] = target.path
@@ -1658,19 +1659,19 @@ func loadPackageDescription() throws -> [String: String] {
 /// exit codes for different failure scenarios.
 func main() {
   do {
-    // Parse arguments
+    /// Parse arguments
     guard let config = parseArguments() else {
       exit(1)
     }
 
-    // Step 1: Validate Package.swift exists
+    /// Step 1: Validate Package.swift exists
     try validatePackageSwift()
 
-    // Step 2: Load package description to get target paths
+    /// Step 2: Load package description to get target paths
     print("📦 Loading package description...")
     let targetPaths = try loadPackageDescription()
 
-    // Step 3: Build symbol graphs (unless --generate-only)
+    /// Step 3: Build symbol graphs (unless --generate-only)
     if !config.generateOnly {
       let modules = try extractPublicModules()
       print("📦 Generating documentation for modules:")
@@ -1705,18 +1706,18 @@ func main() {
       print("⏭️  Skipping build (--generate-only)\n")
     }
 
-    // Step 4: Generate documentation
+    /// Step 4: Generate documentation
     print("📝 Generating Markdown documentation...")
 
-    // Determine which modules to document
-    // If user specified modules, use those; otherwise default to public product modules
+    /// Determine which modules to document
+    /// If user specified modules, use those; otherwise default to public product modules
     let modulesToDocument: Set<String>
     if let userModules = config.modules {
       modulesToDocument = userModules
       print("   Filtering to modules: \(modulesToDocument.sorted().joined(separator: ", "))")
     }
     else {
-      // Default behavior: only document public product modules (not dependencies)
+      /// Default behavior: only document public product modules (not dependencies)
       let publicModules = try extractPublicModules()
       modulesToDocument = Set(publicModules)
       print("   Filtering to public product modules: \(modulesToDocument.sorted().joined(separator: ", "))")
@@ -1725,7 +1726,7 @@ func main() {
     let symbolGraphsURL = URL(fileURLWithPath: config.symbolGraphsDir)
     let outputURL = URL(fileURLWithPath: config.outputDir)
 
-    // Create output directory if needed
+    /// Create output directory if needed
     try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
 
     let generator = DocumentationGenerator(
@@ -1753,5 +1754,5 @@ func main() {
   }
 }
 
-// Run main
+/// Run main
 main()
