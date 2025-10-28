@@ -422,21 +422,21 @@ class DocumentationGenerator {
 
   /// Detects if a symbol is re-exported from another module
   private func isReexportedSymbol(_ symbol: SymbolGraph.Symbol) -> Bool {
-    // Check for external module patterns in the precise identifier
+    /// Check for external module patterns in the precise identifier
     let preciseID = symbol.identifier.precise
 
-    // Objective-C symbols (c:objc) are typically re-exported from Apple frameworks
+    /// Objective-C symbols (c:objc) are typically re-exported from Apple frameworks
     if preciseID.hasPrefix("c:objc") {
       return true
     }
 
-    // C symbols (c:) - exclude C enums which start with c:@E@
-    if preciseID.hasPrefix("c:"), !preciseID.hasPrefix("c:@E@") {
+    // C symbols (c:) - these are typically re-exported from C frameworks
+    if preciseID.hasPrefix("c:") {
       return true
     }
 
-    // Swift bridging symbols for Objective-C types (So*) that come from re-exports
-    if preciseID.hasPrefix("So"), !preciseID.contains("Example") {
+    /// Swift bridging symbols for Objective-C types (s:...So...) that come from re-exports
+    if preciseID.hasPrefix("s:"), preciseID.contains("So"), !preciseID.contains("Example") {
       return true
     }
 
@@ -446,12 +446,12 @@ class DocumentationGenerator {
   private func processModule(moduleName: String, fileName: String) throws {
     print("Processing module: \(moduleName)")
 
-    // Read main module file
+    /// Read main module file
     let fileURL = symbolGraphsDir.appendingPathComponent(fileName)
     let data = try Data(contentsOf: fileURL)
     let graph = try JSONDecoder().decode(SymbolGraph.self, from: data)
 
-    // Also read extension files (e.g., ModuleName@Swift.symbols.json)
+    /// Also read extension files (e.g., ModuleName@Swift.symbols.json)
     var allSymbols = graph.symbols
     var allRelationships = graph.relationships ?? []
     let fm = FileManager.default
@@ -470,39 +470,43 @@ class DocumentationGenerator {
       }
     }
 
-    // Filter to public API symbols (public and open) and exclude synthesized ones
-    // Also filter out re-exported symbols unless explicitly included
+    /// Filter to public API symbols (public and open) and exclude synthesized ones
+    /// Also filter out re-exported symbols unless explicitly included
     let publicSymbols = allSymbols.filter {
       ($0.accessLevel == "public" || $0.accessLevel == "open") &&
         !$0.identifier.precise.contains("::SYNTHESIZED::") &&
         (includeReexported || !isReexportedSymbol($0))
     }
 
-    // Group symbols by type and nesting
+    /// Group symbols by type and nesting
     var topLevelSymbols: [SymbolGraph.Symbol] = []
     var allSymbolsByPath: [String: SymbolGraph.Symbol] = [:] // path key -> symbol
     var extensionGroups: [String: [SymbolGraph.Symbol]] = [:] // extended type -> methods
 
-    // Build a map of all symbols by their path for easy lookup
+    /// Build a map of all symbols by their path for easy lookup
     for symbol in publicSymbols {
       let pathKey = symbol.pathComponents.joined(separator: ".")
       allSymbolsByPath[pathKey] = symbol
     }
 
-    // Identify top-level symbols and extensions
+    /// Identify top-level symbols and extensions
     for symbol in publicSymbols {
       if symbol.pathComponents.count == 1 {
-        topLevelSymbols.append(symbol)
+        /// Filter out re-exported symbols from top-level symbols as well
+        if includeReexported || !isReexportedSymbol(symbol) {
+          topLevelSymbols.append(symbol)
+        }
       }
       else if symbol.pathComponents.count > 1 {
         let parent = symbol.pathComponents[0]
 
-        // Check if parent is one of our defined types
+        /// Check if parent is one of our defined types
         let hasParentType = publicSymbols.contains { $0.pathComponents.count == 1 && $0.names.title == parent }
 
         if !hasParentType {
-          // This is an extension to an external type - only include direct children
-          if symbol.pathComponents.count == 2 {
+          /// This is an extension to an external type - only include direct children
+          /// Also filter out re-exported symbols unless explicitly included
+          if symbol.pathComponents.count == 2, includeReexported || !isReexportedSymbol(symbol) {
             if extensionGroups[parent] == nil {
               extensionGroups[parent] = []
             }
@@ -512,13 +516,16 @@ class DocumentationGenerator {
       }
     }
 
-    // Skip modules with no symbols or extensions
+    /// Filter out empty extension groups
+    extensionGroups = extensionGroups.filter { !$0.value.isEmpty }
+
+    /// Skip modules with no symbols or extensions
     if topLevelSymbols.isEmpty, extensionGroups.isEmpty {
       print("  Skipping (no public symbols)")
       return
     }
 
-    // Generate single module file
+    /// Generate single module file
     try generateModuleFile(
       moduleName: moduleName,
       symbols: topLevelSymbols,
@@ -877,10 +884,13 @@ class DocumentationGenerator {
       sortedExtensionGroups.sort { $0.0 < $1.0 }
 
       for (index, (extendedType, methods)) in sortedExtensionGroups.enumerated() {
-        if index > 0 {
-          markdown += "\n"
+        // Only generate extension if it has members after filtering
+        if !methods.isEmpty {
+          if index > 0 {
+            markdown += "\n"
+          }
+          markdown += generateExtensionInterface(extendedType: extendedType, methods: methods)
         }
-        markdown += generateExtensionInterface(extendedType: extendedType, methods: methods)
       }
       markdown += "```\n\n"
     }
