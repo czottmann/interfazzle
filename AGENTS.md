@@ -4,7 +4,7 @@ This file provides guidance to LLM agents when working with code in this reposit
 
 ## Project Overview
 
-Swift-interfizzle is a self-contained Swift script tool that generates Markdown documentation for Swift package public interfaces from symbol graphs. It's designed as a replacement for SourceDocs, avoiding crashes when packages include dependencies with pre-built binaries.
+Swift-interfazzle is a self-contained Swift script tool that generates Markdown documentation for Swift package public interfaces from symbol graphs. It's designed as a replacement for SourceDocs, avoiding crashes when packages include dependencies with pre-built binaries.
 
 **Key characteristics:**
 
@@ -15,7 +15,7 @@ Swift-interfizzle is a self-contained Swift script tool that generates Markdown 
 
 ## Core Architecture
 
-The script follows a clear modular structure within `interfizzle.swift`:
+The script follows a clear modular structure within `interfazzle.swift`:
 
 ```
 Config (lines 5-27)           - Configuration management
@@ -39,14 +39,14 @@ Main Function (lines 1035-1132) - Entry point and error handling
 
 ```bash
 # Primary usage from Swift package root
-./interfizzle.swift
+./interfazzle.swift
 
 # With flags
-./interfizzle.swift --verbose --be-lenient
-./interfizzle.swift --generate-only
+./interfazzle.swift --verbose --be-lenient
+./interfazzle.swift --generate-only
 
 # Show help
-./interfizzle.swift --help
+./interfazzle.swift --help
 ```
 
 ### Development/Debugging Commands

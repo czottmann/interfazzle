@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swiftc:*)",
+      "Bash(../interfazzle:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,4 +1,4 @@
-# swift-interfizzle
+# swift-interfazzle
 
 This project is a simple, rather bare-bones, self-contained Swift script that
 builds Markdown docs for a package's public interface from its Swift symbol
@@ -15,7 +15,7 @@ Glass of documentation. There, I said it.
 
 ## Overview
 
-The `interfizzle.swift` script handles the complete documentation generation
+The `interfazzle.swift` script handles the complete documentation generation
 pipeline:
 
 1. **Validation**: Verifies Package.swift exists in the current directory
@@ -40,7 +40,7 @@ See [Demo](Demo/) folder for a dummy example package containing sources (in
 Generate all documentation from your Swift package root:
 
 ```bash
-./interfizzle.swift
+./interfazzle.swift
 ```
 
 ### Requirements
@@ -70,25 +70,25 @@ The script supports several flags for different workflows:
 
 ```bash
 # Show help and all options
-./interfizzle.swift --help
+./interfazzle.swift --help
 
 # Skip build, regenerate docs from existing symbol graphs (fast)
-./interfizzle.swift --generate-only
+./interfazzle.swift --generate-only
 
 # Show verbose build output for debugging
-./interfizzle.swift --verbose
+./interfazzle.swift --verbose
 
 # Continue with existing symbol graphs if build fails
-./interfizzle.swift --be-lenient
+./interfazzle.swift --be-lenient
 
 # Document specific modules only
-./interfizzle.swift .build/symbol-graphs docs "Licensing,Trialling,AppUpdating"
+./interfazzle.swift .build/symbol-graphs docs "Licensing,Trialling,AppUpdating"
 
 # Use custom directories
-./interfizzle.swift .build/symbols output-docs
+./interfazzle.swift .build/symbols output-docs
 
 # Combine flags
-./interfizzle.swift --verbose --be-lenient
+./interfazzle.swift --verbose --be-lenient
 ```
 
 ### Flags
@@ -151,7 +151,7 @@ included after the module heading. The script:
 
 ## Script
 
-### `interfizzle.swift`
+### `interfazzle.swift`
 
 Unified Swift script that handles the complete documentation generation
 pipeline.
@@ -203,7 +203,7 @@ information:
 
 ### Conversion Process
 
-The `interfizzle.swift` script's Markdown generation phase:
+The `interfazzle.swift` script's Markdown generation phase:
 
 1. **Reads** symbol graph JSON files from `.build/symbol-graphs/`
 2. **Filters** to public product modules by default (excludes dependencies)
@@ -253,6 +253,8 @@ how developers actually view APIs in Xcode.
 
 Potential enhancements:
 
+- [ ] Make it a real package, maybe?
+- [ ] 
 - [ ] Generate cross-reference links between types
 - [ ] Add availability information (iOS 16+, macOS 13+, etc.) to declarations
 
@@ -298,7 +300,7 @@ Use `--be-lenient` to generate docs from existing symbol graphs even if the
 build fails:
 
 ```bash
-./interfizzle.swift --be-lenient
+./interfazzle.swift --be-lenient
 ```
 
 ### Dependency modules appearing in output
@@ -313,7 +315,7 @@ Use `--generate-only` to skip the build phase and regenerate docs from existing
 symbol graphs:
 
 ```bash
-./interfizzle.swift --generate-only
+./interfazzle.swift --generate-only
 ```
 
 This is much faster when you've only changed documentation comments or README
