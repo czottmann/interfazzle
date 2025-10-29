@@ -4,7 +4,7 @@ import Foundation
 ///
 /// This struct encapsulates all command-line options and settings that control
 /// how symbol graphs are built and documentation is generated.
-public struct Config {
+public struct Config: Sendable {
   // MARK: - Static Properties
 
   /// Default configuration values for the documentation generator.
