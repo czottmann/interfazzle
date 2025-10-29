@@ -5,7 +5,7 @@ import Foundation
 ///
 /// This initializes the SwiftCLI framework and registers all available commands.
 @main
-struct Interfazzle {
+struct InterfazzleCLI {
   static func main() {
     let cli = CLI(
       name: "interfazzle",
