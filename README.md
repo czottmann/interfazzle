@@ -1,22 +1,38 @@
 # swift-interfazzle
 
-This project is a simple, rather bare-bones, self-contained Swift script that builds Markdown docs for a package's public interface from its Swift symbol graphs.
+A Swift package that builds Markdown documentation for a package's public interface from Swift symbol graphs.
 
-Its aimed at package maintainers.
+Built for package maintainers who need clean, LLM-friendly documentation without DocC's complexity.
 
-I built this for myself, first and foremost – it scratches my own itches. But it feels kinda useful, even more so now that many of us work with LLMs, and they need to read docs, too. And DocC and its dynamic-page nonsense is the Liquid Glass of documentation. There, I said it.
-
-**2025-10-28: THIS IS A WORK IN PROGRESS. USE WITH CAUTION, AT YOUR OWN RISK.**
+**2025-10-29: Version 2.0 - Now a proper Swift package!**
 
 ## Overview
 
-The `interfazzle.swift` script handles the complete documentation generation pipeline:
+Interfazzle handles the complete documentation generation pipeline:
 
 1. **Validation**: Verifies Package.swift exists in the current directory
 2. **Symbol Graph Generation**: Uses Swift's built-in compiler to generate symbol graph JSON files
 3. **Markdown Conversion**: Converts symbol graphs to interface-style Markdown documentation
 
 This approach replaces the old `sourcedocs` tool, which fails when the package includes dependencies with pre-built binaries.
+
+## Installation
+
+### Install from Source
+
+```bash
+git clone https://github.com/yourusername/swift-interfazzle.git
+cd swift-interfazzle
+swift build -c release
+cp .build/release/interfazzle /usr/local/bin/
+```
+
+### Build Locally
+
+```bash
+swift build
+# Use with: swift run interfazzle
+```
 
 ## Demo
 
@@ -29,15 +45,16 @@ See [Demo](Demo/) folder for a dummy example package containing sources (in [Dem
 Generate all documentation from your Swift package root:
 
 ```bash
-./interfazzle.swift
+interfazzle generate
+# or if not installed:
+swift run interfazzle generate
 ```
 
 ### Requirements
 
-- Currently only tested on macOS w/ Swift 6 (it uses `/usr/bin/swift` under the hood)
+- macOS with Swift 6 (tested on Swift 6.0+)
 - Must be run from a directory containing `Package.swift`
-- Outputs to `docs/` in the current working directory
-- No external dependencies required (pure Swift + Foundation)
+- Outputs to `docs/` in the current working directory by default
 
 This will:
 
@@ -52,52 +69,101 @@ This will:
    - Intelligently adjusted heading levels for proper hierarchy
    - Automatic filtering to package modules only (excludes dependencies and re-exports)
 
-## Advanced Usage
+### Commands
 
-The script supports several flags for different workflows:
+Interfazzle provides three main commands:
+
+#### `generate` - Generate Documentation
+
+Generate complete documentation (build + convert):
 
 ```bash
-# Show help and all options
-./interfazzle.swift --help
-
-# Skip build, regenerate docs from existing symbol graphs (fast)
-./interfazzle.swift --generate-only
-
-# Show verbose build output for debugging
-./interfazzle.swift --verbose
-
-# Continue with existing symbol graphs if build fails
-./interfazzle.swift --be-lenient
-
-# Include re-exported symbols (e.g., from @_exported import)
-./interfazzle.swift --include-reexported
-
-# Document specific modules only
-./interfazzle.swift .build/symbol-graphs docs "Licensing,Trialling,AppUpdating"
-
-# Use custom directories
-./interfazzle.swift .build/symbols output-docs
-
-# Combine flags
-./interfazzle.swift --verbose --be-lenient
-./interfazzle.swift --include-reexported --verbose
+interfazzle generate [options] [symbol-graphs-dir] [output-dir] [modules]
 ```
 
-### Flags
+#### `build` - Build Symbol Graphs Only
+
+Build symbol graphs without generating documentation:
+
+```bash
+interfazzle build [options] [symbol-graphs-dir]
+```
+
+#### `validate` - Validate Package
+
+Verify Package.swift exists in current directory:
+
+```bash
+interfazzle validate
+```
+
+## Options
+
+### Global Flags
+
+Available for `generate` and `build` commands:
+
+- `-v, --verbose`: Show full `swift build` output (default: suppressed unless error)
+- `--be-lenient`: On build failure, attempt to continue with existing symbol graphs instead of failing
+- `-h, --help`: Show command-specific help
+
+### Generate Command Flags
+
+Additional flags for `generate`:
 
 - `--generate-only`: Skip build phase, use existing symbol graphs (useful for quick regeneration)
-- `--verbose`: Show full `swift build` output (default: suppressed unless error)
-- `--be-lenient`: On build failure, attempt to generate docs from existing symbol graphs instead of failing
-- `--include-reexported`: Include symbols from re-exported modules (e.g., from `@_exported import`) in documentation
-- `--help`, `-h`: Show usage information
+- `--include-reexported`: Include symbols from re-exported modules (e.g., from `@_exported import`)
 
-### Arguments (all optional)
+### Arguments
 
-- `SYMBOL_GRAPHS_DIR`: Directory for symbol graphs (default: `.build/symbol-graphs`)
-- `OUTPUT_DIR`: Output directory for docs (default: `docs`)
-- `MODULES`: Comma-separated list of modules to document (default: all public product modules)
+All commands accept optional positional arguments:
 
-**Note**: By default, the script only generates documentation for modules listed in Package.swift's products (your public API). Dependency modules like SwiftSyntax etc. are automatically excluded.
+- `[symbol-graphs-dir]`: Directory for symbol graphs (default: `.build/symbol-graphs`)
+- `[output-dir]`: Output directory for docs (default: `docs`) - `generate` only
+- `[modules]`: Comma-separated list of modules to document (default: all public product modules)
+
+**Note**: By default, only modules listed in Package.swift's products (your public API) are documented. Dependency modules are automatically excluded.
+
+## Examples
+
+```bash
+# Show all available commands
+interfazzle --help
+
+# Show help for a specific command
+interfazzle generate --help
+
+# Basic documentation generation
+interfazzle generate
+
+# Skip build, regenerate docs from existing symbol graphs (fast)
+interfazzle generate --generate-only
+
+# Show verbose build output for debugging
+interfazzle generate --verbose
+
+# Continue with existing symbol graphs if build fails
+interfazzle generate --be-lenient
+
+# Include re-exported symbols (e.g., from @_exported import)
+interfazzle generate --include-reexported
+
+# Document specific modules only
+interfazzle generate .build/symbol-graphs docs "Licensing,Trialling,AppUpdating"
+
+# Use custom directories
+interfazzle generate .build/symbols output-docs
+
+# Combine flags
+interfazzle generate --verbose --be-lenient
+interfazzle generate --include-reexported --verbose
+
+# Just build symbol graphs without generating docs
+interfazzle build --verbose
+
+# Validate package before other operations
+interfazzle validate
+```
 
 ## Output Format
 
@@ -132,18 +198,27 @@ If a module folder contains a `README.md` file, its content is automatically inc
    - Applies the same shift to all other headings to maintain hierarchy
 3. Example: README with `##` and `###` → becomes `###` and `####` in output
 
-## Script
+## Architecture
 
-### `interfazzle.swift`
+Interfazzle is now a proper Swift package with modular architecture:
 
-Unified Swift script that handles the complete documentation generation pipeline.
+### Package Structure
 
-**Features**:
+- **`Interfazzle`** - Core library module with all documentation generation logic
+  - `Models/` - Data structures (Config, SymbolGraph, PackageDescription)
+  - `Core/` - Core logic (PackageValidator, SymbolGraphBuilder, ModuleExtractor, PackageInfoLoader)
+  - `Generation/` - Documentation generation (DocumentationGenerator, SymbolSorter, DeclarationFormatter, MarkdownFormatter)
+
+- **`InterfazzleCLI`** - Executable module with SwiftCLI-based command-line interface
+  - `Commands/` - Command implementations (GenerateCommand, BuildCommand, ValidateCommand)
+  - Uses [SwiftCLI](https://github.com/jakeheis/SwiftCLI) for argument parsing and help generation
+
+### Features
 
 - **Validation**: Checks for Package.swift in current directory
 - **Orchestration**: Builds symbol graphs and generates documentation in one command
 - **Filtering**: Automatically filters to public product modules (excludes dependencies and re-exports)
-- **Flags**: `--generate-only`, `--verbose`, `--be-lenient`, `--include-reexported` for different workflows
+- **Multiple Commands**: Separate commands for generate, build, and validate
 - **Customization**: Optional custom directories and module filtering
 - **README Integration**: Automatically includes README.md from module source folders
 - **Heading Adjustment**: Intelligently adjusts README heading levels to maintain hierarchy
@@ -154,12 +229,16 @@ Unified Swift script that handles the complete documentation generation pipeline
 - **Doc Comments**: Renders documentation comments as triple-slash (`///`) syntax
 - **Error Handling**: Clear error messages with appropriate exit codes
 
-**Exit Codes**:
+### Exit Codes
 
 - `0`: Success
 - `1`: Validation error (e.g., Package.swift not found)
 - `2`: Build error (when not using `--be-lenient`)
 - `3`: Documentation generation error
+
+### Legacy Script
+
+The original monolithic `interfazzle.swift` script is preserved as `interfazzle.legacy.swift` for reference purposes. It should not be used or modified.
 
 ## How It Works
 
@@ -175,7 +254,7 @@ Swift's compiler can emit "symbol graphs" - JSON files containing all public API
 
 ### Conversion Process
 
-The `interfazzle.swift` script's Markdown generation phase:
+The `DocumentationGenerator` module's Markdown generation phase:
 
 1. **Reads** symbol graph JSON files from `.build/symbol-graphs/`
 2. **Filters** to public product modules by default (excludes dependencies)
@@ -215,16 +294,22 @@ The interface-style format is more compact, easier to read, and better reflects 
 
 Potential enhancements:
 
-- [ ] Make it a real package, maybe?
-- [ ]
+- [x] Make it a real package - **Done in v2.0!**
 - [ ] Generate cross-reference links between types
 - [ ] Add availability information (iOS 16+, macOS 13+, etc.) to declarations
+- [ ] Support for Linux and other platforms
 
 ## Troubleshooting
 
 ### "Cannot read symbol graphs directory"
 
-Run the script without `--generate-only` to build symbol graphs first, or manually build them:
+Run `interfazzle generate` without `--generate-only` to build symbol graphs first, or use the build command:
+
+```bash
+interfazzle build
+```
+
+Or manually build them:
 
 ```bash
 swift build -Xswiftc -emit-symbol-graph -Xswiftc -emit-symbol-graph-dir -Xswiftc .build/symbol-graphs
@@ -232,7 +317,7 @@ swift build -Xswiftc -emit-symbol-graph -Xswiftc -emit-symbol-graph-dir -Xswiftc
 
 ### "Package.swift not found in current directory"
 
-The script must be run from the root of a Swift package (where Package.swift is located).
+All commands must be run from the root of a Swift package (where Package.swift is located). Use `interfazzle validate` to check.
 
 ### Missing symbols in output
 
@@ -255,29 +340,29 @@ The script uses Swift's declaration fragments directly. If formatting looks odd,
 Use `--be-lenient` to generate docs from existing symbol graphs even if the build fails:
 
 ```bash
-./interfazzle.swift --be-lenient
+interfazzle generate --be-lenient
 ```
 
 ### Dependency modules appearing in output
 
-This shouldn't happen with the current version. The script automatically filters to only public product modules. If you see dependency docs being generated, please report it as a bug.
+This shouldn't happen with the current version. Interfazzle automatically filters to only public product modules. If you see dependency docs being generated, please report it as a bug.
 
 ### Regenerating docs quickly after edits
 
 Use `--generate-only` to skip the build phase and regenerate docs from existing symbol graphs:
 
 ```bash
-./interfazzle.swift --generate-only
+interfazzle generate --generate-only
 ```
 
 This is much faster when you've only changed documentation comments or README files.
 
 ### Re-exported symbols missing from output
 
-By default, the script filters out symbols from re-exported modules (e.g., from `@_exported import`) to keep documentation focused on your package's own API. If you need to include these symbols:
+By default, Interfazzle filters out symbols from re-exported modules (e.g., from `@_exported import`) to keep documentation focused on your package's own API. If you need to include these symbols:
 
 ```bash
-./interfazzle.swift --include-reexported
+interfazzle generate --include-reexported
 ```
 
 This will include symbols from frameworks like OSLog that are re-exported using `@_exported import`.
