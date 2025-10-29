@@ -4,7 +4,7 @@ A Swift package that builds Markdown documentation for a package's public interf
 
 Built for package maintainers who need clean, LLM-friendly documentation without DocC's complexity.
 
-**2025-10-29: Version 2.0 - Now a proper Swift package!**
+**2025-10-29: Version 1.0 - Now a proper Swift package!**
 
 ## Overview
 
