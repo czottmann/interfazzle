@@ -78,7 +78,7 @@ Interfazzle provides three main commands:
 Generate complete documentation (build + convert):
 
 ```bash
-interfazzle generate [options] [symbol-graphs-dir] [output-dir] [modules]
+interfazzle generate [options]
 ```
 
 #### `build` - Build Symbol Graphs Only
@@ -86,7 +86,7 @@ interfazzle generate [options] [symbol-graphs-dir] [output-dir] [modules]
 Build symbol graphs without generating documentation:
 
 ```bash
-interfazzle build [options] [symbol-graphs-dir]
+interfazzle build [options]
 ```
 
 #### `validate` - Validate Package
@@ -113,14 +113,15 @@ Additional flags for `generate`:
 
 - `--generate-only`: Skip build phase, use existing symbol graphs (useful for quick regeneration)
 - `--include-reexported`: Include symbols from re-exported modules (e.g., from `@_exported import`)
+- `--symbol-graphs-dir <dir>`: Directory for symbol graphs (default: `.build/symbol-graphs`)
+- `--output-dir <dir>`: Output directory for documentation (default: `docs`)
+- `--modules <list>`: Comma-separated list of modules to document (default: all public products)
 
-### Arguments
+### Build Command Flags
 
-All commands accept optional positional arguments:
+Flags for `build`:
 
-- `[symbol-graphs-dir]`: Directory for symbol graphs (default: `.build/symbol-graphs`)
-- `[output-dir]`: Output directory for docs (default: `docs`) - `generate` only
-- `[modules]`: Comma-separated list of modules to document (default: all public product modules)
+- `--symbol-graphs-dir <dir>`: Directory for symbol graphs (default: `.build/symbol-graphs`)
 
 **Note**: By default, only modules listed in Package.swift's products (your public API) are documented. Dependency modules are automatically excluded.
 
@@ -149,17 +150,23 @@ interfazzle generate --be-lenient
 interfazzle generate --include-reexported
 
 # Document specific modules only
-interfazzle generate .build/symbol-graphs docs "Licensing,Trialling,AppUpdating"
+interfazzle generate --modules "Licensing,Trialling,AppUpdating"
 
 # Use custom directories
-interfazzle generate .build/symbols output-docs
+interfazzle generate --symbol-graphs-dir .build/symbols --output-dir output-docs
 
 # Combine flags
 interfazzle generate --verbose --be-lenient
 interfazzle generate --include-reexported --verbose
 
+# Custom directories with specific modules
+interfazzle generate --symbol-graphs-dir custom-graphs --output-dir custom-docs --modules "MyModule"
+
 # Just build symbol graphs without generating docs
 interfazzle build --verbose
+
+# Build to custom directory
+interfazzle build --symbol-graphs-dir custom-graphs
 
 # Validate package before other operations
 interfazzle validate

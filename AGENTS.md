@@ -134,7 +134,7 @@ rm -rf .build
 Generate complete documentation (build + convert):
 
 ```bash
-interfazzle generate [options] [symbol-graphs-dir] [output-dir] [modules]
+interfazzle generate [options]
 ```
 
 **Flags:**
@@ -143,20 +143,22 @@ interfazzle generate [options] [symbol-graphs-dir] [output-dir] [modules]
 - `-v, --verbose` - Show full build output
 - `--be-lenient` - Continue with existing graphs if build fails
 - `--include-reexported` - Include re-exported symbols from dependencies
-
-**Arguments:**
-
-- `[symbol-graphs-dir]` - Symbol graph directory (default: `.build/symbol-graphs`)
-- `[output-dir]` - Output directory (default: `docs`)
-- `[modules]` - Comma-separated module list (default: all public products)
+- `--symbol-graphs-dir <dir>` - Symbol graph directory (default: `.build/symbol-graphs`)
+- `--output-dir <dir>` - Output directory (default: `docs`)
+- `--modules <list>` - Comma-separated module list (default: all public products)
 
 ### build
 
 Build symbol graphs without generating documentation:
 
 ```bash
-interfazzle build [options] [symbol-graphs-dir]
+interfazzle build [options]
 ```
+
+**Flags:**
+
+- `-v, --verbose` - Show full build output
+- `--symbol-graphs-dir <dir>` - Symbol graph directory (default: `.build/symbol-graphs`)
 
 ### validate
 
