@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(swiftc:*)",
-      "Bash(../interfazzle:*)"
+      "Bash(../interfazzle:*)",
+      "Bash(.build/debug/interfazzle:*)"
     ],
     "deny": [],
     "ask": []

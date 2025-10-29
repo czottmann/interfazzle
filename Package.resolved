@@ -1,0 +1,15 @@
+{
+  "originHash" : "707fbb6ad5d3820d8bf80a0b84cf03c790fb90403ed45b2711d95c21cf06a8b1",
+  "pins" : [
+    {
+      "identity" : "swiftcli",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jakeheis/SwiftCLI",
+      "state" : {
+        "revision" : "2e949055d9797c1a6bddcda0e58dada16cc8e970",
+        "version" : "6.0.3"
+      }
+    }
+  ],
+  "version" : 3
+}
