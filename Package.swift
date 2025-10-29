@@ -24,7 +24,8 @@ let package = Package(
   targets: [
     .target(
       name: "Interfazzle",
-      dependencies: []
+      dependencies: [],
+      exclude: ["README.md"]
     ),
     .executableTarget(
       name: "InterfazzleCLI",
@@ -32,11 +33,13 @@ let package = Package(
         "Interfazzle",
         .product(name: "SwiftCLI", package: "SwiftCLI"),
       ],
-      path: "Sources/InterfazzleCLI"
+      path: "Sources/InterfazzleCLI",
+      exclude: ["README.md"]
     ),
     .testTarget(
       name: "InterfazzleTests",
-      dependencies: ["Interfazzle"]
+      dependencies: ["Interfazzle"],
+      exclude: ["README.md"]
     ),
   ]
 )
