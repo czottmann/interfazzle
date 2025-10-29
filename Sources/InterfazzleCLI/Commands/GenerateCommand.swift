@@ -24,9 +24,14 @@ class GenerateCommand: Command {
   @Flag("--include-reexported", description: "Include re-exported symbols in documentation")
   var includeReexported: Bool
 
-  @Param var symbolGraphsDir: String?
-  @Param var outputDir: String?
-  @Param var modules: String?
+  @Key("--symbol-graphs-dir", description: "Directory for symbol graphs (default: .build/symbol-graphs)")
+  var symbolGraphsDir: String?
+
+  @Key("--output-dir", description: "Output directory for documentation (default: docs)")
+  var outputDir: String?
+
+  @Key("--modules", description: "Comma-separated list of modules to document (default: all public products)")
+  var modules: String?
 
   // MARK: - Functions
 

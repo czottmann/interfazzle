@@ -16,7 +16,8 @@ class BuildCommand: Command {
   @Flag("-v", "--verbose", description: "Show full swift build output")
   var verbose: Bool
 
-  @Param var symbolGraphsDir: String?
+  @Key("--symbol-graphs-dir", description: "Directory for symbol graphs (default: .build/symbol-graphs)")
+  var symbolGraphsDir: String?
 
   // MARK: - Functions
 
