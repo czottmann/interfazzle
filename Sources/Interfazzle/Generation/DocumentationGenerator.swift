@@ -174,6 +174,9 @@ public class DocumentationGenerator {
       allSymbolsByPath[pathKey] = symbol
     }
 
+    /// Build a set of top-level symbol names for O(1) lookup (fixes O(n³) complexity)
+    let topLevelSymbolNames = Set(publicSymbols.filter { $0.pathComponents.count == 1 }.map(\.names.title))
+
     /// Identify top-level symbols and extensions
     for symbol in publicSymbols {
       if symbol.pathComponents.count == 1 {
@@ -185,8 +188,8 @@ public class DocumentationGenerator {
       else if symbol.pathComponents.count > 1 {
         let parent = symbol.pathComponents[0]
 
-        /// Check if parent is one of our defined types
-        let hasParentType = publicSymbols.contains { $0.pathComponents.count == 1 && $0.names.title == parent }
+        /// Check if parent is one of our defined types using O(1) set lookup
+        let hasParentType = topLevelSymbolNames.contains(parent)
 
         if !hasParentType {
           /// This is an extension to an external type - only include direct children

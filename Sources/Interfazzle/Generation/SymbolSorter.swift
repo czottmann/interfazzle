@@ -96,11 +96,12 @@ public struct SymbolSorter {
     return dependencies
   }
 
-  /// Performs topological sort on symbols based on their dependencies.
+  /// Performs topological sort on symbols based on their dependencies using Kahn's algorithm.
   ///
   /// This method sorts symbols so that dependencies appear before the symbols
   /// that depend on them. This ensures proper documentation order where base
   /// classes and protocols are documented before their subclasses/conformers.
+  /// Uses O(n+m) complexity for efficient processing of large dependency graphs.
   ///
   /// - Parameters:
   ///   - symbols: Array of symbols to sort.
@@ -109,37 +110,59 @@ public struct SymbolSorter {
   public func topologicalSort(symbols: [SymbolGraph.Symbol],
                               dependencies: [String: Set<String>]) -> [SymbolGraph.Symbol]
   {
-    var remainingSymbols = symbols
-    var processedIDs = Set<String>()
-    var sortedSymbols: [SymbolGraph.Symbol] = []
+    /// Build a symbol ID lookup for O(1) access
+    let symbolByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.identifier.precise, $0) })
 
-    /// Iteratively find symbols with no unprocessed dependencies
-    while !remainingSymbols.isEmpty {
-      var foundSymbol = false
+    /// Calculate in-degree for each symbol (number of incoming edges)
+    var inDegree: [String: Int] = [:]
+    for symbol in symbols {
+      inDegree[symbol.identifier.precise] = 0
+    }
 
-      for (index, symbol) in remainingSymbols.enumerated() {
-        let symbolID = symbol.identifier.precise
-        let symbolDeps = dependencies[symbolID] ?? Set<String>()
-
-        /// Check if all dependencies have been processed
-        if symbolDeps.isSubset(of: processedIDs) {
-          sortedSymbols.append(symbol)
-          processedIDs.insert(symbolID)
-          remainingSymbols.remove(at: index)
-          foundSymbol = true
-          break
+    /// Count dependencies for each symbol
+    for (symbolID, deps) in dependencies {
+      for dep in deps {
+        /// Only count dependencies that are within our symbol set
+        if symbolByID[dep] != nil {
+          inDegree[symbolID, default: 0] += 1
         }
-      }
-
-      /// If we couldn't find a symbol with no dependencies, we have a cycle
-      if !foundSymbol {
-        /// Add remaining symbols in their original order to break the cycle
-        sortedSymbols.append(contentsOf: remainingSymbols)
-        break
       }
     }
 
-    return sortedSymbols
+    /// Initialize queue with symbols that have no dependencies (in-degree = 0)
+    var queue: [SymbolGraph.Symbol] = []
+    for symbol in symbols {
+      if inDegree[symbol.identifier.precise] == 0 {
+        queue.append(symbol)
+      }
+    }
+
+    var result: [SymbolGraph.Symbol] = []
+
+    /// Process symbols in queue, adding dependents as their in-degree becomes zero
+    while !queue.isEmpty {
+      let current = queue.removeFirst()
+      result.append(current)
+
+      let currentID = current.identifier.precise
+
+      /// Find symbols that depend on the current symbol and reduce their in-degree
+      for (symbolID, deps) in dependencies {
+        if deps.contains(currentID), symbolByID[symbolID] != nil {
+          inDegree[symbolID]! -= 1
+          if inDegree[symbolID] == 0 {
+            queue.append(symbolByID[symbolID]!)
+          }
+        }
+      }
+    }
+
+    /// If we have remaining symbols, there's a cycle - add them in original order
+    let processedIDs = Set(result.map(\.identifier.precise))
+    let remainingSymbols = symbols.filter { !processedIDs.contains($0.identifier.precise) }
+    result.append(contentsOf: remainingSymbols)
+
+    return result
   }
 
   /// Determines the hierarchy rank for a symbol kind identifier.
