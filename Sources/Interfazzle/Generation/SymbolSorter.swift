@@ -1,5 +1,32 @@
 import Foundation
 
+// MARK: - SymbolLookup
+
+/// Shared lookup structure for efficient symbol access.
+///
+/// This struct provides optimized lookups that can be reused across multiple
+/// methods to avoid redundant dictionary creation from the same symbol data.
+private struct SymbolLookup {
+  // MARK: - Properties
+
+  /// Map of symbol IDs to symbols for O(1) lookup.
+  let symbolsByID: [String: SymbolGraph.Symbol]
+
+  /// Set of symbol IDs for fast existence checking.
+  let symbolIDs: Set<String>
+
+  // MARK: - Lifecycle
+
+  /// Initialize lookup structure from symbols array.
+  /// - Parameter symbols: Array of symbols to create lookup for.
+  init(symbols: [SymbolGraph.Symbol]) {
+    symbolsByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.identifier.precise, $0) })
+    symbolIDs = Set(symbols.map(\.identifier.precise))
+  }
+}
+
+// MARK: - SymbolSorter
+
 /// Sorts symbols based on dependencies and type hierarchy.
 ///
 /// This struct provides sophisticated sorting algorithms for organizing symbols
@@ -28,8 +55,8 @@ public struct SymbolSorter {
                              relationships: [SymbolGraph.Relationship],
                              moduleName: String) -> SymbolGraph.Symbol?
   {
-    /// Build a map of symbol IDs to symbols for quick lookup
-    let symbolsByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.identifier.precise, $0) })
+    /// Build a shared lookup structure for O(1) access
+    let lookup = SymbolLookup(symbols: symbols)
 
     /// First priority: Find inheritance hierarchy - look for base classes/structs that others inherit from
     var inheritanceCounts: [String: Int] = [:]
@@ -37,7 +64,7 @@ public struct SymbolSorter {
       if relationship.kind == "inheritsFrom" {
         let targetID = relationship.target
         /// Check if the target is one of our symbols
-        if symbolsByID[targetID] != nil {
+        if lookup.symbolsByID[targetID] != nil {
           inheritanceCounts[targetID, default: 0] += 1
         }
       }
@@ -45,7 +72,7 @@ public struct SymbolSorter {
 
     /// Find the symbol with the most inheritors
     if let mostInheritedID = inheritanceCounts.max(by: { $0.value < $1.value })?.key,
-       let mostInheritedSymbol = symbolsByID[mostInheritedID]
+       let mostInheritedSymbol = lookup.symbolsByID[mostInheritedID]
     {
       return mostInheritedSymbol
     }
@@ -71,9 +98,11 @@ public struct SymbolSorter {
   public func buildDependencyGraph(symbols: [SymbolGraph.Symbol],
                                    relationships: [SymbolGraph.Relationship]) -> [String: Set<String>]
   {
+    /// Build a shared lookup structure for O(1) access
+    let lookup = SymbolLookup(symbols: symbols)
+
     /// Build a map of symbol IDs to their dependencies
     var dependencies: [String: Set<String>] = [:]
-    let symbolsByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.identifier.precise, $0) })
 
     /// Initialize empty dependencies for all symbols
     for symbol in symbols {
@@ -86,8 +115,8 @@ public struct SymbolSorter {
       let targetID = relationship.target
 
       /// If both source and target are in our symbols, source depends on target
-      if symbolsByID[sourceID] != nil,
-         symbolsByID[targetID] != nil
+      if lookup.symbolIDs.contains(sourceID),
+         lookup.symbolIDs.contains(targetID)
       {
         dependencies[sourceID, default: Set<String>()].insert(targetID)
       }
@@ -110,8 +139,8 @@ public struct SymbolSorter {
   public func topologicalSort(symbols: [SymbolGraph.Symbol],
                               dependencies: [String: Set<String>]) -> [SymbolGraph.Symbol]
   {
-    /// Build a symbol ID lookup for O(1) access
-    let symbolByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.identifier.precise, $0) })
+    /// Build a shared lookup structure for O(1) access
+    let lookup = SymbolLookup(symbols: symbols)
 
     /// Calculate in-degree for each symbol (number of incoming edges)
     var inDegree: [String: Int] = [:]
@@ -123,7 +152,7 @@ public struct SymbolSorter {
     for (symbolID, deps) in dependencies {
       for dep in deps {
         /// Only count dependencies that are within our symbol set
-        if symbolByID[dep] != nil {
+        if lookup.symbolIDs.contains(dep) {
           inDegree[symbolID, default: 0] += 1
         }
       }
@@ -148,10 +177,10 @@ public struct SymbolSorter {
 
       /// Find symbols that depend on the current symbol and reduce their in-degree
       for (symbolID, deps) in dependencies {
-        if deps.contains(currentID), symbolByID[symbolID] != nil {
+        if deps.contains(currentID), lookup.symbolIDs.contains(symbolID) {
           inDegree[symbolID]! -= 1
           if inDegree[symbolID] == 0 {
-            queue.append(symbolByID[symbolID]!)
+            queue.append(lookup.symbolsByID[symbolID]!)
           }
         }
       }
