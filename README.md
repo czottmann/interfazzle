@@ -1,7 +1,7 @@
-# swift-interfazzle
+# Interfazzle
 
-A wee Swift CLI tool that builds Markdown documentation for a package's public
-interface from Swift symbol graphs.
+A wee **Swift CLI tool** that builds **Markdown documentation for a package's public
+interface** from Swift symbol graphs.
 
 Its aimed at package maintainers.
 
@@ -30,8 +30,8 @@ package includes dependencies with pre-built binaries.
 ### Install from Source
 
 ```bash
-git clone https://github.com/czottmann/swift-interfazzle.git
-cd swift-interfazzle
+git clone https://github.com/czottmann/interfazzle.git
+cd interfazzle
 swift build -c release
 cp .build/release/interfazzle /usr/local/bin/
 ```

@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-  name: "swift-interfazzle",
+  name: "interfazzle",
   platforms: [
     .macOS(.v13),
   ],

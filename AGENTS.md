@@ -4,7 +4,7 @@ This file provides guidance to LLM agents when working with code in this reposit
 
 ## Project Overview
 
-Swift-interfazzle is a Swift package that generates Markdown documentation for Swift package public interfaces from symbol graphs. It's designed as a replacement for SourceDocs, avoiding crashes when packages include dependencies with pre-built binaries.
+interfazzle is a Swift package that generates Markdown documentation for Swift package public interfaces from symbol graphs. It's designed as a replacement for SourceDocs, avoiding crashes when packages include dependencies with pre-built binaries.
 
 **Key characteristics:**
 
@@ -19,7 +19,7 @@ Swift-interfazzle is a Swift package that generates Markdown documentation for S
 The package follows Swift Package Manager conventions:
 
 ```
-swift-interfazzle/
+interfazzle/
 ├── Package.swift              # Package manifest
 ├── Sources/
 │   ├── Interfazzle/          # Library module (public API)
