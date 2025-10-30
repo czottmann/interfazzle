@@ -4,81 +4,57 @@ import Foundation
 ///
 /// This class provides functionality to query a Swift package and discover
 /// which modules are exposed as public products that should be documented.
+/// It now uses a centralized PackageInfoProvider to avoid duplicate process spawns.
 public struct ModuleExtractor {
   // MARK: - Nested Types
 
   /// Errors that can occur during module extraction.
   public enum ExtractionError: LocalizedError {
-    case swiftCommandFailed
-    case invalidJSON
+    case providerError(String)
 
     // MARK: - Computed Properties
 
     public var errorDescription: String? {
       switch self {
-        case .swiftCommandFailed:
-          "Failed to run 'swift package describe'"
-        case .invalidJSON:
-          "Failed to parse package description JSON"
+        case let .providerError(message):
+          "Package provider error: \(message)"
       }
     }
   }
 
-  /// Product information from package description.
-  private struct PackageInfo: Codable {
-    // MARK: - Nested Types
+  // MARK: - Properties
 
-    struct Product: Codable {
-      let targets: [String]
-    }
-
-    // MARK: - Properties
-
-    let products: [Product]
-  }
+  /// Centralized provider for package information with caching.
+  private let packageInfoProvider: PackageInfoProvider
 
   // MARK: - Lifecycle
 
-  /// Initializes a new ModuleExtractor.
-  public init() {}
+  /// Initializes a new ModuleExtractor with a package info provider.
+  ///
+  /// - Parameter packageInfoProvider: Centralized provider for package information.
+  public init(packageInfoProvider: PackageInfoProvider = PackageInfoProvider()) {
+    self.packageInfoProvider = packageInfoProvider
+  }
 
   // MARK: - Functions
 
   /// Extracts public module names from the Swift package description.
   ///
-  /// This function runs `swift package describe --type json` to get the package
-  /// information and extracts the target names from all products.
+  /// This function uses the centralized PackageInfoProvider to get the package
+  /// information and extracts the target names from all products. This eliminates
+  /// duplicate process spawns and provides caching for improved performance.
   ///
   /// - Returns: An array of module names that are exposed as products in the package.
-  /// - Throws: `ExtractionError` if the command fails or JSON parsing fails.
+  /// - Throws: `ExtractionError` if the package provider fails.
   public func extractPublicModules() throws -> [String] {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
-    process.arguments = ["package", "describe", "--type", "json"]
-
-    let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = Pipe()
-
-    try process.run()
-    process.waitUntilExit()
-
-    guard process.terminationStatus == 0 else {
-      throw ExtractionError.swiftCommandFailed
+    do {
+      return try packageInfoProvider.extractPublicModules()
     }
-
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-
-    guard let packageInfo = try? JSONDecoder().decode(PackageInfo.self, from: data) else {
-      throw ExtractionError.invalidJSON
+    catch let error as PackageInfoProvider.ProviderError {
+      throw ExtractionError.providerError(error.localizedDescription)
     }
-
-    /// Get all unique targets from products (these are the public modules)
-    var modules = Set<String>()
-    for product in packageInfo.products {
-      modules.formUnion(product.targets)
+    catch {
+      throw ExtractionError.providerError(error.localizedDescription)
     }
-
-    return modules.sorted()
   }
 }

@@ -61,9 +61,12 @@ class GenerateCommand: Command {
       throw CLI.Error(message: "", exitStatus: 1)
     }
 
-    /// Step 2: Load package description to get target paths
+    /// Step 2: Load package information using centralized provider
     print("📦 Loading package description...")
-    let packageLoader = PackageInfoLoader()
+    let packageInfoProvider = PackageInfoProvider()
+    let packageLoader = PackageInfoLoader(packageInfoProvider: packageInfoProvider)
+    let moduleExtractor = ModuleExtractor(packageInfoProvider: packageInfoProvider)
+
     let targetPaths: [String: String]
     do {
       targetPaths = try packageLoader.loadPackageDescription()
@@ -75,10 +78,9 @@ class GenerateCommand: Command {
 
     /// Step 3: Build symbol graphs (unless --generate-only)
     if !config.generateOnly {
-      let extractor = ModuleExtractor()
       let modules: [String]
       do {
-        modules = try extractor.extractPublicModules()
+        modules = try moduleExtractor.extractPublicModules()
       }
       catch {
         print("❌ Error: \(error.localizedDescription)")
@@ -113,7 +115,7 @@ class GenerateCommand: Command {
       print("⏭️  Skipping build (--generate-only)\n")
     }
 
-    /// Step 4: Generate documentation
+    /// Step 4: Generate documentation with concurrent file processing
     print("📝 Generating Markdown documentation...")
 
     /// Determine which modules to document
@@ -124,10 +126,10 @@ class GenerateCommand: Command {
     }
     else {
       /// Default behavior: only document public product modules (not dependencies)
-      let extractor = ModuleExtractor()
+      /// Reuse the same moduleExtractor to benefit from cached data
       let publicModules: [String]
       do {
-        publicModules = try extractor.extractPublicModules()
+        publicModules = try moduleExtractor.extractPublicModules()
       }
       catch {
         print("❌ Error: \(error.localizedDescription)")

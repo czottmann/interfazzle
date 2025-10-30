@@ -136,12 +136,18 @@ public class DocumentationGenerator {
     let data = try Data(contentsOf: fileURL)
     let graph = try JSONDecoder().decode(SymbolGraph.self, from: data)
 
-    /// Also read extension files (e.g., ModuleName@Swift.symbols.json)
+    /// Also read extension files (e.g., ModuleName@Swift.symbols.json) - optimized sequential processing
     var allSymbols = graph.symbols
     var allRelationships = graph.relationships ?? []
     let fm = FileManager.default
     if let files = try? fm.contentsOfDirectory(atPath: symbolGraphsDir.path) {
       let extensionFiles = files.filter { $0.hasPrefix("\(moduleName)@") && $0.hasSuffix(".symbols.json") }
+
+      /// Pre-allocate arrays to avoid multiple reallocations
+      allSymbols.reserveCapacity(allSymbols.count + extensionFiles.count * 10)
+      allRelationships.reserveCapacity(allRelationships.count + extensionFiles.count * 5)
+
+      /// Process extension files sequentially but with optimized memory management
       for extFile in extensionFiles {
         let extURL = symbolGraphsDir.appendingPathComponent(extFile)
         if let extData = try? Data(contentsOf: extURL),
