@@ -84,6 +84,7 @@ public class PackageInfoProvider {
     let packageDesc = try fetchPackageDescriptionFromProcess()
     cacheQueue.sync {
       cachedPackageDescription = packageDesc
+      isCachePopulated = true
     }
     return packageDesc
   }
