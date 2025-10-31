@@ -153,15 +153,16 @@ public class PackageInfoProvider {
 
   // MARK: - Private Functions
 
-  /// Fetches package info directly from the Swift process.
+  /// Fetches and decodes package information from the Swift process.
   ///
-  /// This method performs the actual `swift package describe --type json` command
-  /// and should only be called when the cache is empty. The result is cached
-  /// for subsequent calls to avoid process spawn overhead.
+  /// This generic method performs the actual `swift package describe --type json` command
+  /// and decodes the result into the specified type. This eliminates code duplication
+  /// between methods that need different decodable types from the same command.
   ///
-  /// - Returns: PackageInfo parsed from the Swift command output.
+  /// - Parameter type: The Decodable type to decode the JSON response into.
+  /// - Returns: Decoded instance of the specified type.
   /// - Throws: ProviderError if the command fails or JSON parsing fails.
-  private func fetchPackageInfoFromProcess() throws -> PackageInfo {
+  private func fetchPackageData<T: Decodable>(_ type: T.Type) throws -> T {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
     process.arguments = ["package", "describe", "--type", "json"]
@@ -179,11 +180,23 @@ public class PackageInfoProvider {
 
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
 
-    guard let packageInfo = try? jsonDecoder.decode(PackageInfo.self, from: data) else {
+    guard let result = try? jsonDecoder.decode(T.self, from: data) else {
       throw ProviderError.invalidJSON
     }
 
-    return packageInfo
+    return result
+  }
+
+  /// Fetches package info directly from the Swift process.
+  ///
+  /// This method performs the actual `swift package describe --type json` command
+  /// and should only be called when the cache is empty. The result is cached
+  /// for subsequent calls to avoid process spawn overhead.
+  ///
+  /// - Returns: PackageInfo parsed from the Swift command output.
+  /// - Throws: ProviderError if the command fails or JSON parsing fails.
+  private func fetchPackageInfoFromProcess() throws -> PackageInfo {
+    try fetchPackageData(PackageInfo.self)
   }
 
   /// Fetches package description directly from the Swift process.
@@ -195,27 +208,6 @@ public class PackageInfoProvider {
   /// - Returns: PackageDescription parsed from the Swift command output.
   /// - Throws: ProviderError if the command fails or JSON parsing fails.
   private func fetchPackageDescriptionFromProcess() throws -> PackageDescription {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
-    process.arguments = ["package", "describe", "--type", "json"]
-
-    let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = Pipe()
-
-    try process.run()
-    process.waitUntilExit()
-
-    guard process.terminationStatus == 0 else {
-      throw ProviderError.swiftCommandFailed
-    }
-
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-
-    guard let packageDesc = try? jsonDecoder.decode(PackageDescription.self, from: data) else {
-      throw ProviderError.invalidJSON
-    }
-
-    return packageDesc
+    try fetchPackageData(PackageDescription.self)
   }
 }
