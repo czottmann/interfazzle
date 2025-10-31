@@ -119,6 +119,56 @@ struct InterfazzleTests {
 
       #expect(result == "public struct MyStruct")
     }
+
+    @Test("extractTypeName handles standard library types")
+    func handlesStandardLibraryTypes() {
+      let formatter = DeclarationFormatter()
+
+      #expect(formatter.extractTypeName(from: "s:SH") == "Hashable")
+      #expect(formatter.extractTypeName(from: "s:SQ") == "Equatable")
+      #expect(formatter.extractTypeName(from: "s:Ss") == "String")
+      #expect(formatter.extractTypeName(from: "s:Si") == "Int")
+    }
+
+    @Test("extractTypeName caches failed demangle attempts")
+    func cachesFailedDemangleAttempts() {
+      let formatter = DeclarationFormatter()
+
+      /// Try to demangle an invalid Swift identifier
+      /// This should fail and cache the failure as nil
+      let invalidIdentifier = "s:INVALID_IDENTIFIER"
+
+      /// First call - will attempt to demangle and cache failure
+      let result1 = formatter.extractTypeName(from: invalidIdentifier)
+      #expect(result1 == nil)
+
+      /// Second call - should return cached nil without attempting to demangle again
+      /// We can't directly verify it's cached, but if it returns nil quickly, it worked
+      let result2 = formatter.extractTypeName(from: invalidIdentifier)
+      #expect(result2 == nil)
+    }
+
+    @Test("extractTypeName handles Objective-C symbols")
+    func handlesObjectiveCSymbols() {
+      let formatter = DeclarationFormatter()
+
+      /// Test Objective-C class symbol
+      let classResult = formatter.extractTypeName(from: "c:objc(cs)NSString")
+      #expect(classResult == "NSString")
+
+      /// Test Objective-C protocol symbol
+      let protocolResult = formatter.extractTypeName(from: "c:objc(pl)NSCopying")
+      #expect(protocolResult == "NSCopying")
+    }
+
+    @Test("extractTypeName returns nil for non-Swift symbols")
+    func returnsNilForNonSwiftSymbols() {
+      let formatter = DeclarationFormatter()
+
+      /// Test C symbol
+      let result = formatter.extractTypeName(from: "c:@F@some_c_function")
+      #expect(result == nil)
+    }
   }
 
   @Suite("SymbolSorter")

@@ -9,7 +9,8 @@ public class DeclarationFormatter {
   // MARK: - Properties
 
   /// Cache for demangled type names to avoid repeated process calls.
-  private var demangleCache: [String: String] = [:]
+  /// Values are optional to cache failed demangle attempts (nil = failed).
+  private var demangleCache: [String: String?] = [:]
 
   // MARK: - Lifecycle
 
@@ -77,9 +78,9 @@ public class DeclarationFormatter {
 
     /// For Swift symbols, use swift-demangle to get the proper name with caching
     if preciseIdentifier.hasPrefix("s:") {
-      /// Check cache first
-      if let cached = demangleCache[preciseIdentifier] {
-        return cached
+      /// Check cache first (including cached failures stored as nil)
+      if demangleCache.keys.contains(preciseIdentifier) {
+        return demangleCache[preciseIdentifier]!
       }
 
       /// Convert to mangled format that swift-demangle expects (replace "s:" with "$s")
@@ -131,15 +132,15 @@ public class DeclarationFormatter {
   /// swift-demangle call to reduce process spawn overhead. Results are cached.
   ///
   /// - Parameter identifiers: Array of Swift precise identifiers to demangle.
-  /// - Returns: Dictionary mapping identifiers to their demangled type names.
-  func batchDemangle(identifiers: [String]) -> [String: String] {
-    var results: [String: String] = [:]
+  /// - Returns: Dictionary mapping identifiers to their demangled type names (nil = failed).
+  func batchDemangle(identifiers: [String]) -> [String: String?] {
+    var results: [String: String?] = [:]
     var uncachedIdentifiers: [String] = []
 
-    /// Check cache first for all identifiers
+    /// Check cache first for all identifiers (including cached failures)
     for identifier in identifiers {
-      if let cached = demangleCache[identifier] {
-        results[identifier] = cached
+      if demangleCache.keys.contains(identifier) {
+        results[identifier] = demangleCache[identifier]!
       }
       else if identifier.hasPrefix("s:") {
         uncachedIdentifiers.append(identifier)
@@ -166,9 +167,9 @@ public class DeclarationFormatter {
   /// Processes multiple identifiers in a single swift-demangle call.
   ///
   /// - Parameter identifiers: Array of Swift identifiers to demangle.
-  /// - Returns: Dictionary mapping identifiers to demangled type names.
-  private func processBatchDemangle(identifiers: [String]) -> [String: String] {
-    var results: [String: String] = [:]
+  /// - Returns: Dictionary mapping identifiers to demangled type names (nil = failed).
+  private func processBatchDemangle(identifiers: [String]) -> [String: String?] {
+    var results: [String: String?] = [:]
 
     /// Convert identifiers to mangled format
     let mangledIdentifiers = identifiers.map { "$s" + $0.dropFirst(2) }
