@@ -11,7 +11,7 @@ public class PackageInfoProvider {
   /// Errors that can occur during package information loading.
   public enum ProviderError: LocalizedError {
     case swiftCommandFailed
-    case invalidJSON
+    case invalidJSON(Error)
     case cacheError(String)
 
     // MARK: - Computed Properties
@@ -20,8 +20,8 @@ public class PackageInfoProvider {
       switch self {
         case .swiftCommandFailed:
           "Failed to run 'swift package describe'"
-        case .invalidJSON:
-          "Failed to parse package description JSON"
+        case let .invalidJSON(underlyingError):
+          "Failed to parse package description JSON: \(underlyingError.localizedDescription)"
         case let .cacheError(message):
           "Cache error: \(message)"
       }
@@ -180,11 +180,12 @@ public class PackageInfoProvider {
 
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
 
-    guard let result = try? jsonDecoder.decode(T.self, from: data) else {
-      throw ProviderError.invalidJSON
+    do {
+      return try jsonDecoder.decode(T.self, from: data)
     }
-
-    return result
+    catch {
+      throw ProviderError.invalidJSON(error)
+    }
   }
 
   /// Fetches package info directly from the Swift process.
