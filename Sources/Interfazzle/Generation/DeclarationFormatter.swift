@@ -117,6 +117,16 @@ public class DeclarationFormatter {
           /// Output format: "$sMANGLED ---> Module.TypeName"
           if let arrowRange = demangled.range(of: " ---> ") {
             let fullName = String(demangled[arrowRange.upperBound...])
+
+            /// If swift-demangle couldn't demangle, it returns the mangled name on both sides
+            /// Example: "$sINVALID ---> $sINVALID"
+            /// Detect this and treat it as a failure
+            if fullName.hasPrefix("$s") {
+              checkCacheSize()
+              demangleCache[preciseIdentifier] = nil
+              return nil
+            }
+
             /// Extract just the type name (last component after last dot)
             let typeName: String =
               if let lastDot = fullName.lastIndex(of: ".") {
@@ -142,45 +152,6 @@ public class DeclarationFormatter {
     return nil
   }
 
-  /// Batch demangles multiple Swift identifiers in a single process call.
-  ///
-  /// This method takes multiple identifiers and processes them in a single
-  /// swift-demangle call to reduce process spawn overhead. Results are cached.
-  ///
-  /// - Parameter identifiers: Array of Swift precise identifiers to demangle.
-  /// - Returns: Dictionary mapping identifiers to their demangled type names (nil = failed).
-  func batchDemangle(identifiers: [String]) -> [String: String?] {
-    var results: [String: String?] = [:]
-    var uncachedIdentifiers: [String] = []
-
-    /// Check cache first for all identifiers (including cached failures)
-    for identifier in identifiers {
-      if demangleCache.keys.contains(identifier) {
-        results[identifier] = demangleCache[identifier]!
-      }
-      else if identifier.hasPrefix("s:") {
-        uncachedIdentifiers.append(identifier)
-      }
-      else {
-        results[identifier] = nil
-      }
-    }
-
-    /// Process uncached identifiers in batch
-    if !uncachedIdentifiers.isEmpty {
-      let batchResults = processBatchDemangle(identifiers: uncachedIdentifiers)
-
-      /// Cache and merge results (check size limit before caching batch)
-      checkCacheSize()
-      for (identifier, result) in batchResults {
-        demangleCache[identifier] = result
-        results[identifier] = result
-      }
-    }
-
-    return results
-  }
-
   /// Checks cache size and clears if it exceeds the maximum.
   ///
   /// This prevents unbounded memory growth during processing of large symbol sets.
@@ -189,66 +160,5 @@ public class DeclarationFormatter {
     if demangleCache.count >= maxCacheSize {
       demangleCache.removeAll(keepingCapacity: true)
     }
-  }
-
-  /// Processes multiple identifiers in a single swift-demangle call.
-  ///
-  /// - Parameter identifiers: Array of Swift identifiers to demangle.
-  /// - Returns: Dictionary mapping identifiers to demangled type names (nil = failed).
-  private func processBatchDemangle(identifiers: [String]) -> [String: String?] {
-    var results: [String: String?] = [:]
-
-    /// Convert identifiers to mangled format
-    let mangledIdentifiers = identifiers.map { "$s" + $0.dropFirst(2) }
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
-    process.arguments = ["demangle"] + mangledIdentifiers
-
-    let pipe = Pipe()
-    process.standardOutput = pipe
-
-    do {
-      try process.run()
-      let data = pipe.fileHandleForReading.readDataToEndOfFile()
-      process.waitUntilExit()
-
-      if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
-        /// Parse batch output format
-        let lines = output.split(separator: "\n")
-
-        for (index, line) in lines.enumerated() {
-          guard index < identifiers.count else {
-            break
-          }
-
-          /// Output format: "$sMANGLED ---> Module.TypeName"
-          if let arrowRange = line.range(of: " ---> ") {
-            let fullName = String(line[arrowRange.upperBound...])
-            let identifier = identifiers[index]
-
-            /// Extract just the type name (last component after last dot)
-            if let lastDot = fullName.lastIndex(of: ".") {
-              results[identifier] = String(fullName[fullName.index(after: lastDot)...])
-            }
-            else {
-              results[identifier] = fullName
-            }
-          }
-          else {
-            /// Failed to demangle, cache the failure
-            results[identifiers[index]] = nil
-          }
-        }
-      }
-    }
-    catch {
-      /// Batch processing failed, cache failures for all identifiers
-      for identifier in identifiers {
-        results[identifier] = nil
-      }
-    }
-
-    return results
   }
 }
