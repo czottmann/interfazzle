@@ -118,7 +118,10 @@ public class DocumentationGenerator {
     }
 
     /// Swift bridging symbols for Objective-C types (s:...So...) that come from re-exports
-    if preciseID.hasPrefix("s:"), preciseID.contains("So"), !preciseID.contains("Example") {
+    /// The "So" prefix in Swift mangling indicates Objective-C types imported via bridging headers
+    /// or @_exported imports from system frameworks (e.g., NSString, UIView).
+    /// These should be filtered out as they're not part of the module's public interface.
+    if preciseID.hasPrefix("s:"), preciseID.contains("So") {
       return true
     }
 
