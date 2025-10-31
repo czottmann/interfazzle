@@ -55,9 +55,17 @@ public struct SymbolGraphBuilder {
     ]
 
     if verbose {
-      /// Stream output in real-time
+      /// Stream output in real-time (output goes directly to console)
       try process.run()
       process.waitUntilExit()
+
+      /// Check for failure and provide informative error message
+      guard process.terminationStatus == 0 else {
+        throw BuildError.buildFailed(
+          exitCode: process.terminationStatus,
+          output: "(Build output was streamed to console above)"
+        )
+      }
     }
     else {
       /// Capture output, only show on error
@@ -69,7 +77,7 @@ public struct SymbolGraphBuilder {
       try process.run()
       process.waitUntilExit()
 
-      if process.terminationStatus != 0 {
+      guard process.terminationStatus == 0 else {
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
 
@@ -83,10 +91,6 @@ public struct SymbolGraphBuilder {
 
         throw BuildError.buildFailed(exitCode: process.terminationStatus, output: output)
       }
-    }
-
-    guard process.terminationStatus == 0 else {
-      throw BuildError.buildFailed(exitCode: process.terminationStatus, output: "")
     }
   }
 }
