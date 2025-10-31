@@ -10,7 +10,12 @@ public class DeclarationFormatter {
 
   /// Cache for demangled type names to avoid repeated process calls.
   /// Values are optional to cache failed demangle attempts (nil = failed).
+  /// The cache is cleared after documentation generation to prevent unbounded memory growth.
   private var demangleCache: [String: String?] = [:]
+
+  /// Maximum cache size before automatic cleanup is triggered.
+  /// Set conservatively to prevent memory issues with large symbol sets.
+  private let maxCacheSize = 10000
 
   // MARK: - Lifecycle
 
@@ -18,6 +23,15 @@ public class DeclarationFormatter {
   public init() {}
 
   // MARK: - Functions
+
+  /// Clears the demangle cache to free memory.
+  ///
+  /// This should be called after documentation generation completes to prevent
+  /// unbounded memory growth. The cache can grow large when processing thousands
+  /// of symbols, and clearing it after generation prevents memory leaks.
+  public func clearCache() {
+    demangleCache.removeAll()
+  }
 
   /// Formats declaration fragments into a readable string.
   ///
@@ -111,7 +125,8 @@ public class DeclarationFormatter {
               else {
                 fullName
               }
-            /// Cache the result
+            /// Cache the result (check size limit first)
+            checkCacheSize()
             demangleCache[preciseIdentifier] = typeName
             return typeName
           }
@@ -119,6 +134,7 @@ public class DeclarationFormatter {
       }
       catch {
         /// Fall through to return nil, but cache the failure to avoid repeated attempts
+        checkCacheSize()
         demangleCache[preciseIdentifier] = nil
       }
     }
@@ -154,7 +170,8 @@ public class DeclarationFormatter {
     if !uncachedIdentifiers.isEmpty {
       let batchResults = processBatchDemangle(identifiers: uncachedIdentifiers)
 
-      /// Cache and merge results
+      /// Cache and merge results (check size limit before caching batch)
+      checkCacheSize()
       for (identifier, result) in batchResults {
         demangleCache[identifier] = result
         results[identifier] = result
@@ -162,6 +179,16 @@ public class DeclarationFormatter {
     }
 
     return results
+  }
+
+  /// Checks cache size and clears if it exceeds the maximum.
+  ///
+  /// This prevents unbounded memory growth during processing of large symbol sets.
+  /// The cache is cleared entirely when the limit is reached to free memory.
+  private func checkCacheSize() {
+    if demangleCache.count >= maxCacheSize {
+      demangleCache.removeAll(keepingCapacity: true)
+    }
   }
 
   /// Processes multiple identifiers in a single swift-demangle call.
