@@ -58,6 +58,9 @@ public class PackageInfoProvider {
   /// Serial queue to ensure thread-safe cache access.
   private let cacheQueue = DispatchQueue(label: "com.interfazzle.packageinfoprovider")
 
+  /// Shared JSON decoder for efficient package parsing.
+  private let jsonDecoder = JSONDecoder()
+
   // MARK: - Lifecycle
 
   /// Initializes a new PackageInfoProvider.
@@ -175,7 +178,7 @@ public class PackageInfoProvider {
 
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
 
-    guard let packageInfo = try? JSONDecoder().decode(PackageInfo.self, from: data) else {
+    guard let packageInfo = try? jsonDecoder.decode(PackageInfo.self, from: data) else {
       throw ProviderError.invalidJSON
     }
 
@@ -208,7 +211,7 @@ public class PackageInfoProvider {
 
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
 
-    guard let packageDesc = try? JSONDecoder().decode(PackageDescription.self, from: data) else {
+    guard let packageDesc = try? jsonDecoder.decode(PackageDescription.self, from: data) else {
       throw ProviderError.invalidJSON
     }
 

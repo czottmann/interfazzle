@@ -39,6 +39,9 @@ public class DocumentationGenerator {
   /// Helper for formatting markdown.
   private let markdownFormatter = MarkdownFormatter()
 
+  /// Shared JSON decoder for efficient symbol graph parsing.
+  private let jsonDecoder = JSONDecoder()
+
   // MARK: - Lifecycle
 
   /// Initializes a new DocumentationGenerator instance.
@@ -134,9 +137,9 @@ public class DocumentationGenerator {
     /// Read main module file
     let fileURL = symbolGraphsDir.appendingPathComponent(fileName)
     let data = try Data(contentsOf: fileURL)
-    let graph = try JSONDecoder().decode(SymbolGraph.self, from: data)
+    let graph = try jsonDecoder.decode(SymbolGraph.self, from: data)
 
-    /// Also read extension files (e.g., ModuleName@Swift.symbols.json) - optimized sequential processing
+    /// Also read extension files (e.g., ModuleName@Swift.symbols.json) - optimized with shared decoder
     var allSymbols = graph.symbols
     var allRelationships = graph.relationships ?? []
     let fm = FileManager.default
@@ -147,16 +150,19 @@ public class DocumentationGenerator {
       allSymbols.reserveCapacity(allSymbols.count + extensionFiles.count * 10)
       allRelationships.reserveCapacity(allRelationships.count + extensionFiles.count * 5)
 
-      /// Process extension files sequentially but with optimized memory management
+      /// Process extension files sequentially with shared decoder and better error handling
       for extFile in extensionFiles {
         let extURL = symbolGraphsDir.appendingPathComponent(extFile)
-        if let extData = try? Data(contentsOf: extURL),
-           let extGraph = try? JSONDecoder().decode(SymbolGraph.self, from: extData)
-        {
+        do {
+          let extData = try Data(contentsOf: extURL)
+          let extGraph = try jsonDecoder.decode(SymbolGraph.self, from: extData)
           allSymbols.append(contentsOf: extGraph.symbols)
           if let relationships = extGraph.relationships {
             allRelationships.append(contentsOf: relationships)
           }
+        }
+        catch {
+          print("  Warning: Failed to process extension file \(extFile): \(error.localizedDescription)")
         }
       }
     }
