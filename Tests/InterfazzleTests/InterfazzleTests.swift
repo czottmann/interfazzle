@@ -256,6 +256,44 @@ struct InterfazzleTests {
       #expect(result[0].identifier.precise == "s:1")
     }
 
+    @Test("findMainSymbol selection is deterministic with equal inheritance counts")
+    func findMainSymbolIsDeterministic() {
+      let sorter = SymbolSorter()
+
+      /// Create three symbols that will each be inherited from once
+      let baseA = createTestSymbol(name: "BaseA", id: "s:baseA")
+      let baseB = createTestSymbol(name: "BaseB", id: "s:baseB")
+      let baseC = createTestSymbol(name: "BaseC", id: "s:baseC")
+      let derived1 = createTestSymbol(name: "Derived1", id: "s:d1")
+      let derived2 = createTestSymbol(name: "Derived2", id: "s:d2")
+      let derived3 = createTestSymbol(name: "Derived3", id: "s:d3")
+
+      let symbols = [baseA, baseB, baseC, derived1, derived2, derived3]
+
+      /// All three base symbols have equal inheritance count (1)
+      let relationships = [
+        SymbolGraph.Relationship(kind: "inheritsFrom", source: "s:d1", target: "s:baseA"),
+        SymbolGraph.Relationship(kind: "inheritsFrom", source: "s:d2", target: "s:baseB"),
+        SymbolGraph.Relationship(kind: "inheritsFrom", source: "s:d3", target: "s:baseC"),
+      ]
+
+      /// Run multiple times to ensure deterministic selection
+      var results: Set<String> = []
+      for _ in 1...10 {
+        if let mainSymbol = sorter.findMainSymbol(
+          symbols: symbols,
+          relationships: relationships,
+          moduleName: "TestModule"
+        ) {
+          results.insert(mainSymbol.names.title)
+        }
+      }
+
+      /// Should always select the same symbol (alphabetically first: "BaseA")
+      #expect(results.count == 1)
+      #expect(results.first == "BaseA")
+    }
+
     /// Helper to create test symbols
     private func createTestSymbol(name: String, id: String) -> SymbolGraph.Symbol {
       SymbolGraph.Symbol(

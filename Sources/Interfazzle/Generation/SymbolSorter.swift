@@ -71,8 +71,18 @@ public struct SymbolSorter {
     }
 
     /// Find the symbol with the most inheritors
-    if let mostInheritedID = inheritanceCounts.max(by: { $0.value < $1.value })?.key,
-       let mostInheritedSymbol = lookup.symbolsByID[mostInheritedID]
+    /// Use stable sort with secondary criterion (symbol name) for deterministic selection
+    /// when multiple symbols have the same inheritance count
+    if let mostInheritedID = inheritanceCounts.max(by: { lhs, rhs in
+      if lhs.value != rhs.value {
+        return lhs.value < rhs.value
+      }
+      /// Secondary sort by symbol name for deterministic results
+      let lhsName = lookup.symbolsByID[lhs.key]?.names.title ?? ""
+      let rhsName = lookup.symbolsByID[rhs.key]?.names.title ?? ""
+      return lhsName > rhsName /// Alphabetically first symbol wins
+    })?.key,
+      let mostInheritedSymbol = lookup.symbolsByID[mostInheritedID]
     {
       return mostInheritedSymbol
     }
