@@ -178,9 +178,18 @@ public struct SymbolSorter {
       /// Find symbols that depend on the current symbol and reduce their in-degree
       for (symbolID, deps) in dependencies {
         if deps.contains(currentID), lookup.symbolIDs.contains(symbolID) {
-          inDegree[symbolID]! -= 1
+          guard let currentDegree = inDegree[symbolID] else {
+            continue
+          }
+
+          inDegree[symbolID] = currentDegree - 1
+
           if inDegree[symbolID] == 0 {
-            queue.append(lookup.symbolsByID[symbolID]!)
+            guard let symbol = lookup.symbolsByID[symbolID] else {
+              continue
+            }
+
+            queue.append(symbol)
           }
         }
       }

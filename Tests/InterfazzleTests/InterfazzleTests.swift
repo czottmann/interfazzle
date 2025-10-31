@@ -184,6 +184,100 @@ struct InterfazzleTests {
 
       #expect(result == nil)
     }
+
+    @Test("topologicalSort handles empty symbols")
+    func topologicalSortHandlesEmptySymbols() {
+      let sorter = SymbolSorter()
+      let result = sorter.topologicalSort(symbols: [], dependencies: [:])
+
+      #expect(result.isEmpty)
+    }
+
+    @Test("topologicalSort handles symbols with no dependencies")
+    func topologicalSortHandlesNoDependencies() {
+      let sorter = SymbolSorter()
+
+      /// Create test symbols
+      let symbol1 = createTestSymbol(name: "Symbol1", id: "s:1")
+      let symbol2 = createTestSymbol(name: "Symbol2", id: "s:2")
+
+      let symbols = [symbol1, symbol2]
+      let dependencies: [String: Set<String>] = [
+        "s:1": Set<String>(),
+        "s:2": Set<String>(),
+      ]
+
+      let result = sorter.topologicalSort(symbols: symbols, dependencies: dependencies)
+
+      /// Both symbols should be in result
+      #expect(result.count == 2)
+    }
+
+    @Test("topologicalSort handles circular dependencies")
+    func topologicalSortHandlesCircularDependencies() {
+      let sorter = SymbolSorter()
+
+      /// Create test symbols with circular dependency
+      let symbol1 = createTestSymbol(name: "Symbol1", id: "s:1")
+      let symbol2 = createTestSymbol(name: "Symbol2", id: "s:2")
+
+      let symbols = [symbol1, symbol2]
+      let dependencies: [String: Set<String>] = [
+        "s:1": Set(["s:2"]),
+        "s:2": Set(["s:1"]),
+      ]
+
+      let result = sorter.topologicalSort(symbols: symbols, dependencies: dependencies)
+
+      /// Should still return all symbols despite cycle
+      #expect(result.count == 2)
+    }
+
+    @Test("topologicalSort handles inconsistent data gracefully")
+    func topologicalSortHandlesInconsistentData() {
+      let sorter = SymbolSorter()
+
+      /// Create test symbols
+      let symbol1 = createTestSymbol(name: "Symbol1", id: "s:1")
+
+      let symbols = [symbol1]
+
+      /// Dependencies reference a non-existent symbol
+      let dependencies: [String: Set<String>] = [
+        "s:1": Set(["s:999"]), // Non-existent symbol
+        "s:999": Set<String>(), // Symbol not in symbols array
+      ]
+
+      /// Should not crash with force unwrap
+      let result = sorter.topologicalSort(symbols: symbols, dependencies: dependencies)
+
+      /// Should still return the valid symbol
+      #expect(result.count == 1)
+      #expect(result[0].identifier.precise == "s:1")
+    }
+
+    /// Helper to create test symbols
+    private func createTestSymbol(name: String, id: String) -> SymbolGraph.Symbol {
+      SymbolGraph.Symbol(
+        kind: SymbolGraph.Symbol.Kind(
+          identifier: "swift.struct",
+          displayName: "Structure"
+        ),
+        identifier: SymbolGraph.Symbol.Identifier(
+          precise: id,
+          interfaceLanguage: "swift"
+        ),
+        pathComponents: [name],
+        names: SymbolGraph.Symbol.Names(
+          title: name,
+          subHeading: nil
+        ),
+        docComment: nil,
+        declarationFragments: nil,
+        functionSignature: nil,
+        accessLevel: "public"
+      )
+    }
   }
 
   @Suite("PackageInfoProvider")
