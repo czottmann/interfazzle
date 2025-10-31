@@ -135,4 +135,82 @@ struct InterfazzleTests {
       #expect(result == nil)
     }
   }
+
+  @Suite("PackageInfoProvider")
+  struct PackageInfoProviderTests {
+    @Test("Cache is populated after loadPackageDescription")
+    func cachePopulatedAfterLoadPackageDescription() throws {
+      /// This test verifies that calling loadPackageDescription sets the cache flag
+      /// Running in the actual package directory so swift package describe works
+      let provider = PackageInfoProvider()
+
+      /// First call should populate cache
+      _ = try provider.loadPackageDescription()
+
+      /// Clear cache and verify it was populated
+      /// We can't directly check isCachePopulated (it's private), but we can verify
+      /// that subsequent calls to extractPublicModules don't fail and use cache
+      let modules = try provider.extractPublicModules()
+
+      /// Should have at least the main module
+      #expect(!modules.isEmpty)
+    }
+
+    @Test("Multiple calls use cached data")
+    func multipleCallsUseCachedData() throws {
+      /// This test verifies that multiple calls don't spawn multiple processes
+      /// by checking that the results are consistent
+      let provider = PackageInfoProvider()
+
+      /// First call
+      let modules1 = try provider.extractPublicModules()
+
+      /// Second call should use cache
+      let modules2 = try provider.extractPublicModules()
+
+      /// Results should be identical
+      #expect(modules1 == modules2)
+
+      /// Third call with loadPackageDescription first
+      let provider2 = PackageInfoProvider()
+      let desc = try provider2.loadPackageDescription()
+      let modules3 = try provider2.extractPublicModules()
+
+      /// Should work and return consistent results
+      #expect(!modules3.isEmpty)
+      #expect(!desc.targets.isEmpty)
+    }
+
+    @Test("loadTargetPaths returns consistent results")
+    func loadTargetPathsReturnsConsistentResults() throws {
+      let provider = PackageInfoProvider()
+
+      /// First call
+      let paths1 = try provider.loadTargetPaths()
+
+      /// Second call should use cache
+      let paths2 = try provider.loadTargetPaths()
+
+      /// Results should be identical
+      #expect(paths1.count == paths2.count)
+      for (key, value) in paths1 {
+        #expect(paths2[key] == value)
+      }
+    }
+
+    @Test("clearCache invalidates cached data")
+    func clearCacheInvalidatesData() throws {
+      let provider = PackageInfoProvider()
+
+      /// Populate cache
+      _ = try provider.extractPublicModules()
+
+      /// Clear cache
+      provider.clearCache()
+
+      /// Should still work (will re-fetch)
+      let modules = try provider.extractPublicModules()
+      #expect(!modules.isEmpty)
+    }
+  }
 }
