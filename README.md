@@ -16,24 +16,6 @@ Interfazzle handles the complete documentation generation pipeline:
 
 This approach replaces the old `sourcedocs` tool, which failed for me when the package includes dependencies with pre-built binaries.
 
-## Installation
-
-### Install from Source
-
-```bash
-git clone https://github.com/czottmann/interfazzle.git
-cd interfazzle
-swift build -c release
-cp .build/release/interfazzle /usr/local/bin/
-```
-
-### Build Locally
-
-```bash
-swift build
-# Use with: swift run interfazzle
-```
-
 ## Demo
 
 See [Demo](Demo/) folder for a dummy example package containing sources (in [Demo/Sources/](Demo/Sources/)) and generated documentation (in [Demo/docs/](Demo/docs/)).
@@ -207,6 +189,28 @@ If a module folder contains a `README.md` file, its content is automatically inc
    - Shifts it to H3 to fit under the module's H2
    - Applies the same shift to all other headings to maintain hierarchy
 3. Example: README with `##` and `###` → becomes `###` and `####` in output
+
+## Installation
+
+### Install from Source
+
+```bash
+git clone https://github.com/czottmann/interfazzle.git
+cd interfazzle
+swift build -c release
+cp .build/release/interfazzle /usr/local/bin/
+```
+
+### Build Locally
+
+```bash
+swift build
+# Use with: swift run interfazzle
+```
+
+### Mise tasks
+
+This project uses [mise-en-place's tasks](https://mise.jdx.dev/tasks/) for convenience. Run `mise tasks` to see what's available.
 
 ## Architecture
 
