@@ -1,1 +1,1 @@
-let packageVersion = "2025.11.1"
+let packageVersion = "2025.11.0"
