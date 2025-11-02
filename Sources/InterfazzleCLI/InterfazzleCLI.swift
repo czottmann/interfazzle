@@ -7,10 +7,15 @@ import Foundation
 @main
 struct InterfazzleCLI {
   static func main() {
+    /// Print banner if no arguments or if --help is present
+    if CommandLine.arguments.count == 1 || CommandLine.arguments.contains("--help") {
+      printBanner()
+    }
+
     let cli = CLI(
       name: "interfazzle",
-      version: "2.0.0",
-      description: "Generate API documentation from Swift symbol graphs"
+      version: packageVersion,
+      description: "Generate API documentation for Swift packages from symbol graphs"
     )
 
     cli.commands = [
@@ -20,5 +25,14 @@ struct InterfazzleCLI {
     ]
 
     cli.go()
+  }
+
+  /// Prints the interfazzle banner to stdout.
+  static func printBanner() {
+    print("""
+    ░░░▀█▀░█▀█░▀█▀░█▀▀░█▀▄░█▀▀░█▀█░▀▀█░▀▀█░█░░░█▀▀░░░░
+    ░░░░█░░█░█░░█░░█▀▀░█▀▄░█▀▀░█▀█░▄▀░░▄▀░░█░░░█▀▀░░░░
+    ░░░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░░░░
+    """)
   }
 }
