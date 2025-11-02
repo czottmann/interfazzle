@@ -4,7 +4,11 @@ A wee **Swift CLI tool** that builds **Markdown documentation for a package's pu
 
 Its aimed at package maintainers.
 
-I built this for myself, first and foremost – it scratches my own itches. But it feels kinda useful, even more so now that many of us work with LLMs, and they need to read docs, too. And DocC and its dynamic-page nonsense is the Liquid Glass of documentation. There, I said it.
+First and foremost, I built this for myself – it scratches my own itches! But it feels kinda useful, even more so now that many of us work with LLMs, and they need to read docs, too. 
+
+I've built it after grilling various LLMs—okay, just Claude Code—about how they work with documentation files, and having them explain in detail what doc structure is useful to them. I combined it with what I (a certified human) look for in docs, and here we are.
+
+Also, DocC and its dynamic-page nonsense is the Liquid Glass of documentation. There, I said it.
 
 ## Overview
 
