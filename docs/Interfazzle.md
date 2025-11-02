@@ -5,6 +5,40 @@ Interfazzle is a library for generating Markdown documentation from Swift symbol
 ### Public interface
 
 ```swift
+/// Formats Swift declaration fragments into readable strings.
+/// 
+/// This class provides utilities for converting symbol graph declaration fragments
+/// into properly formatted Swift code strings for documentation output.
+/// Implements caching for Swift demangle operations to avoid repeated process calls.
+public class DeclarationFormatter {
+  /// Clears the demangle cache to free memory.
+  /// 
+  /// This should be called after documentation generation completes to prevent
+  /// unbounded memory growth. The cache can grow large when processing thousands
+  /// of symbols, and clearing it after generation prevents memory leaks.
+  public func clearCache()
+
+  /// Extracts a readable type name from a precise symbol identifier.
+  /// 
+  /// This method attempts to demangle Swift symbol identifiers and map them to
+  /// human-readable type names. It handles Objective-C symbols, standard library types,
+  /// and uses swift-demangle for complex Swift symbols.
+  /// 
+  /// - Parameter preciseIdentifier: The precise identifier from a symbol graph.
+  /// - Returns: A readable type name if extraction succeeds, nil otherwise.
+  public func extractTypeName(from preciseIdentifier: String) -> String?
+
+  /// Formats declaration fragments into a readable string.
+  /// 
+  /// This function filters out unwanted keywords/attributes and optionally adds
+  /// a public modifier if not already present.
+  /// 
+  public func formatDeclaration(fragments: [SymbolGraph.Symbol.DeclarationFragment], addPublic: Bool) -> String
+
+  /// Initializes a new DeclarationFormatter.
+  public init()
+}
+
 /// Generates Markdown documentation from Swift symbol graph files.
 /// 
 /// This class is responsible for processing Swift symbol graphs and converting them
@@ -25,6 +59,65 @@ public class DocumentationGenerator {
   /// Initializes a new DocumentationGenerator instance.
   /// 
   public init(symbolGraphsDir: URL, outputDir: URL, targetPaths: [String : String], includeReexported: Bool = false)
+}
+
+/// Centralized provider for Swift package information with caching.
+/// 
+/// This class provides a unified interface for querying Swift package information
+/// while avoiding duplicate process spawns. It caches package description data
+/// to eliminate the 50-100ms overhead per process spawn mentioned in ZCO-1553.
+public class PackageInfoProvider {
+  /// Errors that can occur during package information loading.
+  public enum ProviderError: LocalizedError, Error, Sendable {
+    /// A localized message describing what error occurred.
+    public var errorDescription: String? { get }
+
+    public case cacheError(String)
+
+    public case invalidJSON(Error)
+
+    public case swiftCommandFailed
+  }
+
+  /// Clears the cached package information.
+  /// 
+  /// This method invalidates all cached data, forcing the next call to
+  /// reload fresh information from the Swift package. This is useful for
+  /// testing or when the package configuration may have changed.
+  public func clearCache()
+
+  /// Extracts and caches public module names from the package description.
+  /// 
+  /// This method reuses the cached package description to extract public module
+  /// names without spawning additional processes. It gets all unique targets from
+  /// products in the package (these are the public modules).
+  /// 
+  /// - Returns: Array of module names that are exposed as products in the package.
+  /// - Throws: ProviderError if the package description cannot be loaded.
+  public func extractPublicModules() throws -> [String]
+
+  /// Initializes a new PackageInfoProvider.
+  public init()
+
+  /// Loads and caches the complete package description.
+  /// 
+  /// This method runs `swift package describe --type json` once and caches the result
+  /// for subsequent calls. Subsequent calls return the cached data without spawning
+  /// additional processes, eliminating the 50-100ms overhead per call.
+  /// 
+  /// - Returns: PackageDescription with complete package information.
+  /// - Throws: ProviderError if the command fails or JSON parsing fails.
+  public func loadPackageDescription() throws -> PackageDescription
+
+  /// Loads target path information from the cached package description.
+  /// 
+  /// This method reuses the cached package description to build a mapping of
+  /// target names to their file system paths. This is used to locate README.md
+  /// files within each target directory without spawning additional processes.
+  /// 
+  /// - Returns: Dictionary mapping target names to their relative file system paths.
+  /// - Throws: ProviderError if the package description cannot be loaded.
+  public func loadTargetPaths() throws -> [String : String]
 }
 
 /// Configuration settings for the interfazzle documentation generator.
@@ -92,32 +185,6 @@ public struct Config: Sendable {
   public init(symbolGraphsDir: String, outputDir: String, modules: Set<String>?, generateOnly: Bool, verbose: Bool, beLenient: Bool, includeReexported: Bool)
 }
 
-/// Formats Swift declaration fragments into readable strings.
-/// 
-/// This struct provides utilities for converting symbol graph declaration fragments
-/// into properly formatted Swift code strings for documentation output.
-public struct DeclarationFormatter {
-  /// Extracts a readable type name from a precise symbol identifier.
-  /// 
-  /// This method attempts to demangle Swift symbol identifiers and map them to
-  /// human-readable type names. It handles Objective-C symbols, standard library types,
-  /// and uses swift-demangle for complex Swift symbols.
-  /// 
-  /// - Parameter preciseIdentifier: The precise identifier from a symbol graph.
-  /// - Returns: A readable type name if extraction succeeds, nil otherwise.
-  public func extractTypeName(from preciseIdentifier: String) -> String?
-
-  /// Formats declaration fragments into a readable string.
-  /// 
-  /// This function filters out unwanted keywords/attributes and optionally adds
-  /// a public modifier if not already present.
-  /// 
-  public func formatDeclaration(fragments: [SymbolGraph.Symbol.DeclarationFragment], addPublic: Bool) -> String
-
-  /// Initializes a new DeclarationFormatter.
-  public init()
-}
-
 /// Utilities for formatting Markdown content.
 /// 
 /// This struct provides helper functions for processing Markdown text,
@@ -148,28 +215,30 @@ public struct MarkdownFormatter {
 /// 
 /// This class provides functionality to query a Swift package and discover
 /// which modules are exposed as public products that should be documented.
+/// It now uses a centralized PackageInfoProvider to avoid duplicate process spawns.
 public struct ModuleExtractor {
   /// Errors that can occur during module extraction.
   public enum ExtractionError: Sendable, Error, LocalizedError {
     /// A localized message describing what error occurred.
     public var errorDescription: String? { get }
 
-    public case invalidJSON
-
-    public case swiftCommandFailed
+    public case providerError(String)
   }
 
   /// Extracts public module names from the Swift package description.
   /// 
-  /// This function runs `swift package describe --type json` to get the package
-  /// information and extracts the target names from all products.
+  /// This function uses the centralized PackageInfoProvider to get the package
+  /// information and extracts the target names from all products. This eliminates
+  /// duplicate process spawns and provides caching for improved performance.
   /// 
   /// - Returns: An array of module names that are exposed as products in the package.
-  /// - Throws: `ExtractionError` if the command fails or JSON parsing fails.
+  /// - Throws: `ExtractionError` if the package provider fails.
   public func extractPublicModules() throws -> [String]
 
-  /// Initializes a new ModuleExtractor.
-  public init()
+  /// Initializes a new ModuleExtractor with a package info provider.
+  /// 
+  /// - Parameter packageInfoProvider: Centralized provider for package information.
+  public init(packageInfoProvider: PackageInfoProvider = PackageInfoProvider())
 }
 
 /// Represents the structure of a Swift package description.
@@ -220,29 +289,31 @@ public struct PackageDescription: Encodable, Decodable {
 /// Loads package description and extracts target path information.
 /// 
 /// This class provides functionality to query a Swift package and discover
-/// the file system locations of targets for README integration.
+/// the file system locations of targets for README integration. It now uses
+/// a centralized PackageInfoProvider to avoid duplicate process spawns.
 public struct PackageInfoLoader {
   /// Errors that can occur during package info loading.
-  public enum LoadError: Error, LocalizedError, Sendable {
+  public enum LoadError: Error, Sendable, LocalizedError {
     /// A localized message describing what error occurred.
     public var errorDescription: String? { get }
 
-    public case invalidJSON
-
-    public case swiftCommandFailed
+    public case providerError(String)
   }
 
-  /// Initializes a new PackageInfoLoader.
-  public init()
+  /// Initializes a new PackageInfoLoader with a package info provider.
+  /// 
+  /// - Parameter packageInfoProvider: Centralized provider for package information.
+  public init(packageInfoProvider: PackageInfoProvider = PackageInfoProvider())
 
   /// Loads package description and extracts target path information.
   /// 
-  /// This function runs `swift package describe --type json` to get information
+  /// This function uses the centralized PackageInfoProvider to get information
   /// about the package targets and their file system locations. The returned
   /// mapping is used to locate README.md files within each target directory.
+  /// This eliminates duplicate process spawns and provides caching for improved performance.
   /// 
   /// - Returns: Dictionary mapping target names to their relative file system paths.
-  /// - Throws: `LoadError` if the command fails or JSON parsing fails.
+  /// - Throws: `LoadError` if the package provider fails.
   public func loadPackageDescription() throws -> [String : String]
 }
 
@@ -252,7 +323,7 @@ public struct PackageInfoLoader {
 /// contains a valid Swift package before attempting to generate documentation.
 public struct PackageValidator {
   /// Errors that can occur during package validation.
-  public enum ValidationError: LocalizedError, Error, Sendable {
+  public enum ValidationError: LocalizedError, Sendable, Error {
     /// A localized message describing what error occurred.
     public var errorDescription: String? { get }
 
@@ -273,11 +344,11 @@ public struct PackageValidator {
 /// Symbol graphs are JSON files generated by the Swift compiler that contain
 /// information about the symbols (types, functions, properties, etc.) in a module,
 /// their relationships, and documentation comments.
-public struct SymbolGraph: Encodable, Decodable {
+public struct SymbolGraph: Decodable, Encodable {
   /// Represents the module information in a symbol graph.
   /// 
   /// This contains basic metadata about the Swift module that the symbol graph describes.
-  public struct Module: Decodable, Encodable {
+  public struct Module: Encodable, Decodable {
     /// The name of the module.
     /// 
     /// This corresponds to the module name that can be imported in Swift code
@@ -297,7 +368,7 @@ public struct SymbolGraph: Encodable, Decodable {
   /// 
   /// This captures various types of relationships such as inheritance,
   /// conformance, membership, and other connections between symbols.
-  public struct Relationship: Encodable, Decodable {
+  public struct Relationship: Decodable, Encodable {
     /// The kind of relationship.
     /// 
     /// Examples include "inheritsFrom", "conformsTo", "memberOf", "overrideOf", etc.
@@ -356,7 +427,7 @@ public struct SymbolGraph: Encodable, Decodable {
     /// 
     /// This contains the structured documentation comments from the source code,
     /// broken down into individual lines for processing.
-    public struct DocComment: Encodable, Decodable {
+    public struct DocComment: Decodable, Encodable {
       /// Represents a single line of documentation comment.
       /// 
       /// Each line is stored separately to preserve formatting and allow
@@ -399,7 +470,7 @@ public struct SymbolGraph: Encodable, Decodable {
       /// 
       /// This contains the parameter name and its type information
       /// as declaration fragments for structured processing.
-      public struct Parameter: Decodable, Encodable {
+      public struct Parameter: Encodable, Decodable {
         /// Declaration fragments describing the parameter's type.
         /// 
         /// This contains the type information and any modifiers for the parameter,
@@ -470,7 +541,7 @@ public struct SymbolGraph: Encodable, Decodable {
     /// 
     /// The identifier follows a specific naming convention used by the Swift compiler
     /// to categorize different types of symbols.
-    public struct Kind: Decodable, Encodable {
+    public struct Kind: Encodable, Decodable {
       /// The human-readable display name for the symbol kind.
       /// 
       /// This is a more user-friendly representation of the symbol type.
@@ -494,7 +565,7 @@ public struct SymbolGraph: Encodable, Decodable {
     /// 
     /// This includes the primary title and any subheading information
     /// that might be used for display purposes.
-    public struct Names: Encodable, Decodable {
+    public struct Names: Decodable, Encodable {
       /// Optional subheading fragments for the symbol.
       /// 
       /// This can contain additional type information or other context
@@ -603,7 +674,7 @@ public struct SymbolGraph: Encodable, Decodable {
 /// generation enabled, producing the JSON files needed for documentation generation.
 public struct SymbolGraphBuilder {
   /// Errors that can occur during symbol graph building.
-  public enum BuildError: Error, LocalizedError, Sendable {
+  public enum BuildError: Sendable, Error, LocalizedError {
     /// A localized message describing what error occurred.
     public var errorDescription: String? { get }
 
@@ -623,4 +694,4 @@ public struct SymbolGraphBuilder {
 }
 ```
 
-<!-- Generated by interfazzle.swift on 2025-10-29 13:03:25 +0100 -->
+<!-- Generated by interfazzle.swift on 2025-11-02 14:49:41 +0100 -->

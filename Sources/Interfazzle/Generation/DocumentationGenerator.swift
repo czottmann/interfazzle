@@ -94,6 +94,202 @@ public class DocumentationGenerator {
 
   // MARK: - Private Functions
 
+  /// Returns the lowercase type label for a symbol.
+  ///
+  /// This method maps symbol kind identifiers to their lowercase type names
+  /// for use in documentation tables and headings.
+  ///
+  /// - Parameter symbol: The symbol to get the type label for.
+  /// - Returns: Lowercase type label (e.g., "class", "struct", "enum").
+  private func getTypeLabel(for symbol: SymbolGraph.Symbol) -> String {
+    let kindIdentifier = symbol.kind.identifier
+
+    return switch kindIdentifier {
+      case "swift.class":
+        "class"
+      case "swift.struct":
+        "struct"
+      case "swift.enum":
+        "enum"
+      case "swift.protocol":
+        "protocol"
+      case "swift.actor":
+        "actor"
+      case "swift.macro":
+        "macro"
+      case "swift.func",
+           "swift.method",
+           "swift.type.method":
+        "func"
+      case "swift.typealias":
+        "typealias"
+      case "swift.property",
+           "swift.type.property",
+           "swift.var":
+        "var"
+      case let kind where kind.contains("extension"):
+        "extension"
+      default:
+        "symbol"
+    }
+  }
+
+  /// Returns a formatted type label for an extension.
+  ///
+  /// This method creates a label like "Task extension" for extensions to external types.
+  ///
+  /// - Parameter extendedType: The name of the type being extended.
+  /// - Returns: Formatted extension label (e.g., "Task extension").
+  private func getTypeLabelForExtension(extendedType: String) -> String {
+    "\(extendedType) extension"
+  }
+
+  /// Generates a Quick Reference table for all symbols in the module.
+  ///
+  /// This method creates a markdown table listing all symbols (including nested types)
+  /// in the exact order they appear in the Public Interface section.
+  ///
+  /// - Parameters:
+  ///   - orderedSymbols: Top-level symbols in display order (main + remaining).
+  ///   - extensionGroups: Extension groups sorted by extended type name.
+  ///   - allSymbolsByPath: Map of all symbols by their path for nested type lookup.
+  /// - Returns: Markdown table string with Type and Name columns.
+  private func generateQuickReference(orderedSymbols: [SymbolGraph.Symbol],
+                                      extensionGroups: [(String, [SymbolGraph.Symbol])],
+                                      allSymbolsByPath: [String: SymbolGraph.Symbol]) -> String
+  {
+    var tableRows: [(type: String, name: String)] = []
+
+    /// Recursively collect a symbol and all its nested types in display order
+    func collectSymbolsRecursively(_ symbol: SymbolGraph.Symbol) {
+      let typeLabel = getTypeLabel(for: symbol)
+      tableRows.append((type: typeLabel, name: symbol.names.title))
+
+      /// Get direct children in the same order as generateInterfaceDeclaration
+      let currentPathLength = symbol.pathComponents.count
+      let directChildren = allSymbolsByPath.values.filter { child in
+        child.pathComponents.count == currentPathLength + 1 &&
+          child.pathComponents.prefix(currentPathLength) == symbol.pathComponents[...]
+      }
+
+      /// Separate nested types from members (same logic as generateInterfaceDeclaration)
+      let nestedTypes = directChildren.filter {
+        ["swift.struct", "swift.class", "swift.enum", "swift.protocol"].contains($0.kind.identifier)
+      }
+
+      /// Sort nested types by name and recursively collect them
+      for nestedType in nestedTypes.sorted(by: { $0.names.title < $1.names.title }) {
+        collectSymbolsRecursively(nestedType)
+      }
+    }
+
+    /// Collect all top-level symbols and their nested types
+    for symbol in orderedSymbols {
+      collectSymbolsRecursively(symbol)
+    }
+
+    /// Add extension groups
+    for (extendedType, _) in extensionGroups {
+      let extensionLabel = getTypeLabelForExtension(extendedType: extendedType)
+      tableRows.append((type: extensionLabel, name: extendedType))
+    }
+
+    /// Generate markdown table
+    if tableRows.isEmpty {
+      return ""
+    }
+
+    var markdown = "### Quick Reference\n\n"
+    markdown += "| Type | Name |\n"
+    markdown += "| --- | --- |\n"
+
+    for row in tableRows {
+      markdown += "| \(row.type) | `\(row.name)` |\n"
+    }
+
+    markdown += "\n"
+    return markdown
+  }
+
+  /// Generates a code block for a top-level symbol with its own heading.
+  ///
+  /// This method creates an H4 heading followed by a code fence containing
+  /// the complete interface declaration for the symbol and its members.
+  ///
+  /// - Parameters:
+  ///   - symbol: The top-level symbol to generate a block for.
+  ///   - allSymbolsByPath: Map of all symbols by their path for nested type lookup.
+  ///   - relationships: Symbol relationships for inheritance/conformance.
+  /// - Returns: Markdown block with heading and code fence.
+  private func generateTopLevelSymbolBlock(symbol: SymbolGraph.Symbol,
+                                           allSymbolsByPath: [String: SymbolGraph.Symbol],
+                                           relationships: [SymbolGraph.Relationship]) -> String
+  {
+    let typeLabel = getTypeLabel(for: symbol)
+    var markdown = "#### \(typeLabel) \(symbol.names.title)\n\n"
+    markdown += "```swift\n"
+    markdown += generateInterfaceDeclaration(
+      symbol: symbol,
+      allSymbolsByPath: allSymbolsByPath,
+      relationships: relationships,
+      indent: ""
+    )
+    markdown += "```\n\n"
+    return markdown
+  }
+
+  /// Generates a code block for an extension with its own heading.
+  ///
+  /// This method creates an H4 heading for an extension followed by a code fence
+  /// containing the extension's methods and properties.
+  ///
+  /// - Parameters:
+  ///   - extendedType: Name of the type being extended.
+  ///   - methods: Methods and properties in the extension.
+  /// - Returns: Markdown block with heading and code fence.
+  private func generateExtensionBlock(extendedType: String, methods: [SymbolGraph.Symbol]) -> String {
+    let typeLabel = getTypeLabelForExtension(extendedType: extendedType)
+    var markdown = "#### \(typeLabel)\n\n"
+    markdown += "```swift\n"
+    markdown += generateExtensionInterface(extendedType: extendedType, methods: methods)
+    markdown += "```\n\n"
+    return markdown
+  }
+
+  /// Generates a code block for global functions and variables.
+  ///
+  /// This method creates an H4 "Globals" heading followed by a code fence
+  /// containing standalone functions, macros, and variables.
+  ///
+  /// - Parameter globals: Array of global symbols (functions, macros, variables).
+  /// - Returns: Markdown block with heading and code fence.
+  private func generateGlobalsBlock(globals: [SymbolGraph.Symbol]) -> String {
+    if globals.isEmpty {
+      return ""
+    }
+
+    var markdown = "#### Globals\n\n"
+    markdown += "```swift\n"
+
+    for (index, symbol) in globals.enumerated() {
+      if index > 0 {
+        markdown += "\n"
+      }
+
+      /// Add doc comment
+      markdown += markdownFormatter.formatDocComment(symbol.docComment, indent: "")
+
+      /// Add declaration
+      if let fragments = symbol.declarationFragments {
+        let declaration = declarationFormatter.formatDeclaration(fragments: fragments, addPublic: true)
+        markdown += "\(declaration)\n"
+      }
+    }
+
+    markdown += "```\n\n"
+    return markdown
+  }
+
   /// Detects if a symbol is re-exported from another module.
   ///
   /// This method filters out symbols that come from external frameworks through
@@ -340,85 +536,68 @@ public class DocumentationGenerator {
 
     /// Separate main symbol from the rest if found
     var orderedSymbols: [SymbolGraph.Symbol] = []
-    var remainingSymbols: [SymbolGraph.Symbol] = []
 
     if let main = mainSymbol {
       orderedSymbols.append(main)
-      remainingSymbols = hierarchySortedSymbols.filter { $0.identifier.precise != main.identifier.precise }
+      orderedSymbols
+        .append(contentsOf: hierarchySortedSymbols.filter { $0.identifier.precise != main.identifier.precise })
     }
     else {
-      remainingSymbols = hierarchySortedSymbols
+      orderedSymbols = hierarchySortedSymbols
     }
 
-    /// Add public interface heading before first code block
-    var hasAddedHeading = false
-    func writeInterfaceBlock(_ symbols: [SymbolGraph.Symbol]) {
-      if symbols.isEmpty {
-        return
-      }
+    /// Sort extension groups using the same hierarchy logic
+    var sortedExtensionGroups: [(String, [SymbolGraph.Symbol])] = []
+    sortedExtensionGroups.reserveCapacity(extensionGroups.count)
 
-      if !hasAddedHeading {
-        markdownComponents.append("### Public interface\n\n")
-        hasAddedHeading = true
-      }
-
-      markdownComponents.append("```swift\n")
-      for (index, symbol) in symbols.enumerated() {
-        if index > 0 {
-          markdownComponents.append("\n")
-        }
-        markdownComponents.append(generateInterfaceDeclaration(
-          symbol: symbol,
-          allSymbolsByPath: allSymbolsByPath,
-          relationships: relationships,
-          indent: ""
-        ))
-      }
-      markdownComponents.append("```\n\n")
+    for (extendedType, methods) in extensionGroups {
+      /// Build dependencies for extension methods
+      let extDependencies = sorter.buildDependencyGraph(symbols: methods, relationships: relationships)
+      /// Sort methods by hierarchy
+      let sortedMethods = sorter.sortSymbolsByHierarchy(symbols: methods, dependencies: extDependencies)
+      sortedExtensionGroups.append((extendedType, sortedMethods))
     }
 
-    /// Write main symbol first if found
-    if !orderedSymbols.isEmpty {
-      writeInterfaceBlock(orderedSymbols)
+    /// Sort extension groups by extended type name
+    sortedExtensionGroups.sort { $0.0 < $1.0 }
+
+    /// Generate Quick Reference table
+    let quickRef = generateQuickReference(
+      orderedSymbols: orderedSymbols,
+      extensionGroups: sortedExtensionGroups,
+      allSymbolsByPath: allSymbolsByPath
+    )
+    if !quickRef.isEmpty {
+      markdownComponents.append(quickRef)
     }
 
-    /// Write remaining symbols
-    writeInterfaceBlock(remainingSymbols)
+    /// Add Public interface heading
+    markdownComponents.append("### Public interface\n\n")
 
-    /// Write extension groups (extensions to external types) with hierarchy-based ordering
-    if !extensionGroups.isEmpty {
-      if !hasAddedHeading {
-        markdownComponents.append("### Public interface\n\n")
-        hasAddedHeading = true
+    /// Separate symbols into constructs (with bodies) and globals (standalone)
+    let constructKinds: Set<String> = ["swift.class", "swift.struct", "swift.enum", "swift.protocol", "swift.actor"]
+    let constructs = orderedSymbols.filter { constructKinds.contains($0.kind.identifier) }
+    let globals = orderedSymbols.filter { !constructKinds.contains($0.kind.identifier) }
+
+    /// Generate code block for each construct
+    for construct in constructs {
+      markdownComponents.append(generateTopLevelSymbolBlock(
+        symbol: construct,
+        allSymbolsByPath: allSymbolsByPath,
+        relationships: relationships
+      ))
+    }
+
+    /// Generate code blocks for extension groups
+    for (extendedType, methods) in sortedExtensionGroups {
+      if !methods.isEmpty {
+        markdownComponents.append(generateExtensionBlock(extendedType: extendedType, methods: methods))
       }
+    }
 
-      markdownComponents.append("```swift\n")
-
-      /// Sort extension groups using the same hierarchy logic
-      var sortedExtensionGroups: [(String, [SymbolGraph.Symbol])] = []
-      sortedExtensionGroups.reserveCapacity(extensionGroups.count)
-
-      for (extendedType, methods) in extensionGroups {
-        /// Build dependencies for extension methods
-        let extDependencies = sorter.buildDependencyGraph(symbols: methods, relationships: relationships)
-        /// Sort methods by hierarchy
-        let sortedMethods = sorter.sortSymbolsByHierarchy(symbols: methods, dependencies: extDependencies)
-        sortedExtensionGroups.append((extendedType, sortedMethods))
-      }
-
-      /// Sort extension groups by extended type name
-      sortedExtensionGroups.sort { $0.0 < $1.0 }
-
-      for (index, (extendedType, methods)) in sortedExtensionGroups.enumerated() {
-        /// Only generate extension if it has members after filtering
-        if !methods.isEmpty {
-          if index > 0 {
-            markdownComponents.append("\n")
-          }
-          markdownComponents.append(generateExtensionInterface(extendedType: extendedType, methods: methods))
-        }
-      }
-      markdownComponents.append("```\n\n")
+    /// Generate globals block if any exist
+    if !globals.isEmpty {
+      markdownComponents.append(generateGlobalsBlock(globals: globals))
     }
 
     /// Add timestamp at the bottom
