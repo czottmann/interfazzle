@@ -53,6 +53,7 @@ The core library provides all documentation generation functionality:
 - `SymbolGraphBuilder.swift` - Orchestrates Swift compiler to generate symbol graphs
 - `ModuleExtractor.swift` - Extracts public module names from Package.swift
 - `PackageInfoLoader.swift` - Loads target path information for README integration
+- `PackageInfoProvider.swift` - Centralized provider for Swift package information with caching to eliminate duplicate process spawns
 
 **Generation/** - Documentation generation
 
@@ -236,8 +237,10 @@ Generates interface-style Markdown similar to Xcode's generated interfaces:
 
 - H2 heading with module name (e.g., `## Module \`Interfazzle\``)
 - Optional README content with adjusted heading levels (from module source directory)
+- Table of Contents: Markdown table listing all top-level types with their kind (class, struct, enum, etc.)
 - H3 heading: "Public interface"
-- Swift code blocks with complete interface declarations
+- H4 headings for each top-level construct (e.g., `#### class ExampleClass`)
+- Separate Swift code fence for each construct with complete interface declarations
 - Doc comments as triple-slash (`///`) syntax above declarations
 - Symbols grouped by type (protocols → structs → classes → enums → extensions → macros → functions)
 - Nested types rendered within parent declarations
