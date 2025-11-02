@@ -15,7 +15,7 @@ This module showcases different Swift programming patterns including:
 - **Utility functions** in a namespaced enum
 - **Access control** patterns (public vs private)
 
-### Quick Reference
+### Table of Contents
 
 | Type | Name |
 | --- | --- |

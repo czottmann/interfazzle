@@ -37,7 +37,7 @@ struct DocumentationGeneratorTests {
     ]
 
     for (kindIdentifier, expectedLabel) in testCases {
-      let symbol = SymbolGraph.Symbol(
+      _ = SymbolGraph.Symbol(
         kind: SymbolGraph.Symbol.Kind(identifier: kindIdentifier, displayName: "Test"),
         identifier: SymbolGraph.Symbol.Identifier(precise: "test", interfaceLanguage: "swift"),
         pathComponents: ["Test"],
@@ -49,7 +49,7 @@ struct DocumentationGeneratorTests {
       )
 
       /// Use reflection to call the private method for testing
-      let mirror = Mirror(reflecting: generator)
+      _ = Mirror(reflecting: generator)
       #expect(
         kindIdentifier.contains(expectedLabel) || expectedLabel == "symbol" || expectedLabel == "func" ||
           expectedLabel == "var",
@@ -62,7 +62,7 @@ struct DocumentationGeneratorTests {
   @Test("Extension type label formatting")
   func extensionTypeLabel() throws {
     let tempDir = FileManager.default.temporaryDirectory
-    let generator = DocumentationGenerator(
+    _ = DocumentationGenerator(
       symbolGraphsDir: tempDir,
       outputDir: tempDir,
       targetPaths: [:],
@@ -76,8 +76,8 @@ struct DocumentationGeneratorTests {
     #expect(expectedLabel == "Task extension")
   }
 
-  /// Test that Quick Reference table generation produces valid markdown.
-  @Test("Quick Reference table structure")
+  /// Test that Table of Contents table generation produces valid markdown.
+  @Test("Table of Contents table structure")
   func quickReferenceTableStructure() throws {
     /// Create a minimal symbol graph structure
     let symbol1 = SymbolGraph.Symbol(
@@ -102,9 +102,9 @@ struct DocumentationGeneratorTests {
       accessLevel: "public"
     )
 
-    /// Verify that Quick Reference would contain proper structure
+    /// Verify that Table of Contents would contain proper structure
     /// Expected format:
-    /// ### Quick Reference
+    /// ### Table of Contents
     ///
     /// | Type | Name |
     /// | --- | --- |

@@ -144,7 +144,7 @@ public class DocumentationGenerator {
     "\(extendedType) extension"
   }
 
-  /// Generates a Quick Reference table for all symbols in the module.
+  /// Generates a Table of Contents table for all symbols in the module.
   ///
   /// This method creates a markdown table listing all symbols (including nested types)
   /// in the exact order they appear in the Public Interface section.
@@ -199,7 +199,7 @@ public class DocumentationGenerator {
       return ""
     }
 
-    var markdown = "### Quick Reference\n\n"
+    var markdown = "### Table of Contents\n\n"
     markdown += "| Type | Name |\n"
     markdown += "| --- | --- |\n"
 
@@ -572,7 +572,7 @@ public class DocumentationGenerator {
     /// Sort extension groups by extended type name
     sortedExtensionGroups.sort { $0.0 < $1.0 }
 
-    /// Generate Quick Reference table
+    /// Generate Table of Contents table
     let quickRef = generateQuickReference(
       orderedSymbols: orderedSymbols,
       extensionGroups: sortedExtensionGroups,
