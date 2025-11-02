@@ -439,12 +439,24 @@ public class DocumentationGenerator {
   /// - Parameters:
   ///   - symbol: The symbol to analyze for inheritance/conformance.
   ///   - relationships: Array of relationships to search through.
-  /// - Returns: Array of type names that the symbol inherits from or conforms to.
+  /// - Returns: Array of type names that the symbol inherits from or conforms to,
+  ///   sorted deterministically (inheritance first, then conformances, alphabetically within each group).
   private func getInheritanceConformance(for symbol: SymbolGraph.Symbol,
                                          relationships: [SymbolGraph.Relationship]) -> [String]
   {
     let sourceID = symbol.identifier.precise
-    var types: [String] = []
+    var inheritedTypes: [String] = []
+    var conformedTypes: [String] = []
+
+    /// Skip compiler-synthesized or inherited conformances that clutter the output
+    let skipTypes = Set([
+      "CVarArg",
+      "Hashable",
+      "Equatable",
+      "Copyable",
+      "CustomStringConvertible",
+      "CustomDebugStringConvertible",
+    ])
 
     /// Find all inheritsFrom and conformsTo relationships
     let relevantRelationships = relationships.filter {
@@ -453,24 +465,23 @@ public class DocumentationGenerator {
 
     for relationship in relevantRelationships {
       if let typeName = declarationFormatter.extractTypeName(from: relationship.target) {
-        /// Skip compiler-synthesized or inherited conformances that clutter the output
-        let skipTypes = [
-          "CVarArg",
-          "Hashable",
-          "Equatable",
-          "Copyable",
-          "CustomStringConvertible",
-          "CustomDebugStringConvertible",
-        ]
         if !skipTypes.contains(typeName) {
-          types.append(typeName)
+          if relationship.kind == "inheritsFrom" {
+            inheritedTypes.append(typeName)
+          }
+          else {
+            conformedTypes.append(typeName)
+          }
         }
       }
     }
 
-    /// Deduplicate while preserving order (inheritance first, then conformances)
-    var seen = Set<String>()
-    return types.filter { seen.insert($0).inserted }
+    /// Deduplicate and sort each group alphabetically for deterministic output
+    let uniqueInherited = Array(Set(inheritedTypes)).sorted()
+    let uniqueConformed = Array(Set(conformedTypes)).sorted()
+
+    /// Return inheritance first, then conformances
+    return uniqueInherited + uniqueConformed
   }
 
   /// Generates the module documentation file.

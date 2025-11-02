@@ -29,10 +29,11 @@ interfazzle/
 │   └── InterfazzleCLI/       # Executable module
 │       ├── InterfazzleCLI.swift  # @main entry point
 │       └── Commands/         # CLI commands (Generate, Build, Validate)
-├── Tests/
-│   └── InterfazzleTests/     # Unit tests
-└── interfazzle.legacy.swift  # Original monolithic script (reference only)
+└── Tests/
+    └── InterfazzleTests/     # Unit tests
 ```
+
+The package in the `Demo/` directory is only there for demonstration purposes. It's not part of the Interfazzle package. Leave it alone.
 
 ## Core Modules
 
@@ -247,7 +248,3 @@ Generates interface-style Markdown similar to Xcode's generated interfaces:
 - **SwiftCLI** (6.0.3+) - Command-line interface framework
   - Used only by InterfazzleCLI executable
   - Not a dependency of Interfazzle library
-
-## Legacy Script
-
-The original monolithic `interfazzle.swift` script is preserved as `interfazzle.legacy.swift` for reference. It should not be used or modified. All development should use the modular Swift package structure.

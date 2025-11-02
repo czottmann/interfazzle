@@ -2,7 +2,42 @@
 
 Interfazzle is a library for generating Markdown documentation from Swift symbol graphs. It handles the complete pipeline from validating Swift packages and building symbol graphs through the compiler, to parsing the resulting JSON files, organizing symbols by type hierarchy and dependencies, formatting Swift declarations, and generating clean interface-style Markdown documentation with optional README integration. The library is organized into Models (data structures for Config, SymbolGraph, and PackageDescription), Core (workflow components for validation, building, and extraction), and Generation (documentation formatting and output).
 
+### Quick Reference
+
+| Type | Name |
+| --- | --- |
+| class | `DeclarationFormatter` |
+| class | `DocumentationGenerator` |
+| class | `PackageInfoProvider` |
+| enum | `PackageInfoProvider.ProviderError` |
+| struct | `Config` |
+| struct | `MarkdownFormatter` |
+| struct | `ModuleExtractor` |
+| enum | `ModuleExtractor.ExtractionError` |
+| struct | `PackageDescription` |
+| struct | `PackageDescription.Target` |
+| struct | `PackageInfoLoader` |
+| enum | `PackageInfoLoader.LoadError` |
+| struct | `PackageValidator` |
+| enum | `PackageValidator.ValidationError` |
+| struct | `SymbolGraph` |
+| struct | `SymbolGraph.Module` |
+| struct | `SymbolGraph.Relationship` |
+| struct | `SymbolGraph.Symbol` |
+| struct | `SymbolGraph.Symbol.DeclarationFragment` |
+| struct | `SymbolGraph.Symbol.DocComment` |
+| struct | `SymbolGraph.Symbol.DocComment.Line` |
+| struct | `SymbolGraph.Symbol.FunctionSignature` |
+| struct | `SymbolGraph.Symbol.FunctionSignature.Parameter` |
+| struct | `SymbolGraph.Symbol.Identifier` |
+| struct | `SymbolGraph.Symbol.Kind` |
+| struct | `SymbolGraph.Symbol.Names` |
+| struct | `SymbolGraphBuilder` |
+| enum | `SymbolGraphBuilder.BuildError` |
+
 ### Public interface
+
+#### class DeclarationFormatter
 
 ```swift
 /// Formats Swift declaration fragments into readable strings.
@@ -38,7 +73,11 @@ public class DeclarationFormatter {
   /// Initializes a new DeclarationFormatter.
   public init()
 }
+```
 
+#### class DocumentationGenerator
+
+```swift
 /// Generates Markdown documentation from Swift symbol graph files.
 /// 
 /// This class is responsible for processing Swift symbol graphs and converting them
@@ -60,7 +99,11 @@ public class DocumentationGenerator {
   /// 
   public init(symbolGraphsDir: URL, outputDir: URL, targetPaths: [String : String], includeReexported: Bool = false)
 }
+```
 
+#### class PackageInfoProvider
+
+```swift
 /// Centralized provider for Swift package information with caching.
 /// 
 /// This class provides a unified interface for querying Swift package information
@@ -68,7 +111,7 @@ public class DocumentationGenerator {
 /// to eliminate the 50-100ms overhead per process spawn mentioned in ZCO-1553.
 public class PackageInfoProvider {
   /// Errors that can occur during package information loading.
-  public enum ProviderError: LocalizedError, Error, Sendable {
+  public enum ProviderError: Error, LocalizedError, Sendable {
     /// A localized message describing what error occurred.
     public var errorDescription: String? { get }
 
@@ -119,7 +162,11 @@ public class PackageInfoProvider {
   /// - Throws: ProviderError if the package description cannot be loaded.
   public func loadTargetPaths() throws -> [String : String]
 }
+```
 
+#### struct Config
+
+```swift
 /// Configuration settings for the interfazzle documentation generator.
 /// 
 /// This struct encapsulates all command-line options and settings that control
@@ -184,7 +231,11 @@ public struct Config: Sendable {
   /// 
   public init(symbolGraphsDir: String, outputDir: String, modules: Set<String>?, generateOnly: Bool, verbose: Bool, beLenient: Bool, includeReexported: Bool)
 }
+```
 
+#### struct MarkdownFormatter
+
+```swift
 /// Utilities for formatting Markdown content.
 /// 
 /// This struct provides helper functions for processing Markdown text,
@@ -210,7 +261,11 @@ public struct MarkdownFormatter {
   /// Initializes a new MarkdownFormatter.
   public init()
 }
+```
 
+#### struct ModuleExtractor
+
+```swift
 /// Extracts public module names from a Swift package.
 /// 
 /// This class provides functionality to query a Swift package and discover
@@ -218,7 +273,7 @@ public struct MarkdownFormatter {
 /// It now uses a centralized PackageInfoProvider to avoid duplicate process spawns.
 public struct ModuleExtractor {
   /// Errors that can occur during module extraction.
-  public enum ExtractionError: Sendable, Error, LocalizedError {
+  public enum ExtractionError: Error, LocalizedError, Sendable {
     /// A localized message describing what error occurred.
     public var errorDescription: String? { get }
 
@@ -240,12 +295,16 @@ public struct ModuleExtractor {
   /// - Parameter packageInfoProvider: Centralized provider for package information.
   public init(packageInfoProvider: PackageInfoProvider = PackageInfoProvider())
 }
+```
 
+#### struct PackageDescription
+
+```swift
 /// Represents the structure of a Swift package description.
 /// 
 /// This struct is used to parse the JSON output from `swift package describe --type json`
 /// and extract information about package targets and their file system locations.
-public struct PackageDescription: Encodable, Decodable {
+public struct PackageDescription: Decodable, Encodable {
   /// Represents a build target within a Swift package.
   /// 
   /// A target corresponds to a module that can be built as part of the package.
@@ -285,7 +344,11 @@ public struct PackageDescription: Encodable, Decodable {
   /// - Parameter decoder: The decoder to read data from.
   public init(from decoder: any Decoder) throws
 }
+```
 
+#### struct PackageInfoLoader
+
+```swift
 /// Loads package description and extracts target path information.
 /// 
 /// This class provides functionality to query a Swift package and discover
@@ -293,7 +356,7 @@ public struct PackageDescription: Encodable, Decodable {
 /// a centralized PackageInfoProvider to avoid duplicate process spawns.
 public struct PackageInfoLoader {
   /// Errors that can occur during package info loading.
-  public enum LoadError: Error, Sendable, LocalizedError {
+  public enum LoadError: Error, LocalizedError, Sendable {
     /// A localized message describing what error occurred.
     public var errorDescription: String? { get }
 
@@ -316,14 +379,18 @@ public struct PackageInfoLoader {
   /// - Throws: `LoadError` if the package provider fails.
   public func loadPackageDescription() throws -> [String : String]
 }
+```
 
+#### struct PackageValidator
+
+```swift
 /// Validates the Swift package environment.
 /// 
 /// This class provides functionality to verify that the current directory
 /// contains a valid Swift package before attempting to generate documentation.
 public struct PackageValidator {
   /// Errors that can occur during package validation.
-  public enum ValidationError: LocalizedError, Sendable, Error {
+  public enum ValidationError: Error, LocalizedError, Sendable {
     /// A localized message describing what error occurred.
     public var errorDescription: String? { get }
 
@@ -338,7 +405,11 @@ public struct PackageValidator {
   /// - Throws: `ValidationError.packageSwiftNotFound` if Package.swift is not found.
   public func validate() throws
 }
+```
 
+#### struct SymbolGraph
+
+```swift
 /// Represents a Swift symbol graph file structure.
 /// 
 /// Symbol graphs are JSON files generated by the Swift compiler that contain
@@ -348,7 +419,7 @@ public struct SymbolGraph: Decodable, Encodable {
   /// Represents the module information in a symbol graph.
   /// 
   /// This contains basic metadata about the Swift module that the symbol graph describes.
-  public struct Module: Encodable, Decodable {
+  public struct Module: Decodable, Encodable {
     /// The name of the module.
     /// 
     /// This corresponds to the module name that can be imported in Swift code
@@ -397,12 +468,12 @@ public struct SymbolGraph: Decodable, Encodable {
   /// 
   /// This is the core data structure that contains all information about a particular
   /// Swift symbol, including its declaration, documentation, and metadata.
-  public struct Symbol: Encodable, Decodable {
+  public struct Symbol: Decodable, Encodable {
     /// Represents a fragment of a symbol's declaration.
     /// 
     /// Declarations are broken down into fragments to allow for structured
     /// processing and formatting of symbol signatures.
-    public struct DeclarationFragment: Encodable, Decodable {
+    public struct DeclarationFragment: Decodable, Encodable {
       /// The kind of declaration fragment.
       /// 
       /// This indicates what type of token this fragment represents,
@@ -465,12 +536,12 @@ public struct SymbolGraph: Decodable, Encodable {
     /// 
     /// This contains detailed information about function parameters and return types,
     /// broken down into structured declaration fragments.
-    public struct FunctionSignature: Encodable, Decodable {
+    public struct FunctionSignature: Decodable, Encodable {
       /// Represents a parameter in a function signature.
       /// 
       /// This contains the parameter name and its type information
       /// as declaration fragments for structured processing.
-      public struct Parameter: Encodable, Decodable {
+      public struct Parameter: Decodable, Encodable {
         /// Declaration fragments describing the parameter's type.
         /// 
         /// This contains the type information and any modifiers for the parameter,
@@ -515,7 +586,7 @@ public struct SymbolGraph: Decodable, Encodable {
     /// 
     /// This provides a way to uniquely reference symbols across different
     /// symbol graphs and within relationships.
-    public struct Identifier: Encodable, Decodable {
+    public struct Identifier: Decodable, Encodable {
       /// The interface language for this symbol.
       /// 
       /// For Swift symbols, this is typically "swift". This allows symbol graphs
@@ -541,7 +612,7 @@ public struct SymbolGraph: Decodable, Encodable {
     /// 
     /// The identifier follows a specific naming convention used by the Swift compiler
     /// to categorize different types of symbols.
-    public struct Kind: Encodable, Decodable {
+    public struct Kind: Decodable, Encodable {
       /// The human-readable display name for the symbol kind.
       /// 
       /// This is a more user-friendly representation of the symbol type.
@@ -667,14 +738,18 @@ public struct SymbolGraph: Decodable, Encodable {
   /// - Parameter decoder: The decoder to read data from.
   public init(from decoder: any Decoder) throws
 }
+```
 
+#### struct SymbolGraphBuilder
+
+```swift
 /// Builds symbol graphs for a Swift package.
 /// 
 /// This class provides functionality to compile a Swift package with symbol graph
 /// generation enabled, producing the JSON files needed for documentation generation.
 public struct SymbolGraphBuilder {
   /// Errors that can occur during symbol graph building.
-  public enum BuildError: Sendable, Error, LocalizedError {
+  public enum BuildError: Error, LocalizedError, Sendable {
     /// A localized message describing what error occurred.
     public var errorDescription: String? { get }
 
@@ -694,4 +769,4 @@ public struct SymbolGraphBuilder {
 }
 ```
 
-<!-- Generated by interfazzle.swift on 2025-11-02 14:49:41 +0100 -->
+<!-- Generated by interfazzle.swift on 2025-11-02 14:57:29 +0100 -->
