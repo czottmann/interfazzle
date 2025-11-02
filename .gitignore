@@ -32,6 +32,7 @@ xcuserdata/
 # .swiftpm
 
 .build/
+interfazzle-1.1
 
 # Swift build artifacts
 *.d

@@ -1,0 +1,11 @@
+[tasks.build]
+description = "Builds the new `interfazzle` executable in `.build/release/`"
+run = "swift build -c release; ls -al .build/release/"
+
+[tasks.test]
+description = "Run Swift tests"
+run = "swift test"
+
+[tasks.docs]
+description = "Generate docs using `.build/release/interfazzle`"
+run = "interfazzle generate"

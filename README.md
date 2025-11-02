@@ -4,7 +4,9 @@ A wee **Swift CLI tool** that builds **Markdown documentation for a package's pu
 
 Its aimed at package maintainers.
 
-I built this for myself, first and foremost – it scratches my own itches. But it feels kinda useful, even more so now that many of us work with LLMs, and they need to read docs, too. And DocC and its dynamic-page nonsense is the Liquid Glass of documentation. There, I said it.
+First and foremost, I built this for myself – it scratches my own itches! But it feels kinda useful, even more so now that many of us work with LLMs, and they need to read docs, too. To home in on _that_, I grilled various LLMs—okay, just Claude Code—about how they work with documentation files, having them explain in detail what doc structure is useful to them. I combined what I've learned there with what I (a certified human!) look for in docs, and here we are.
+
+Also, DocC and its dynamic-page nonsense is the Liquid Glass of documentation. There, I said it.
 
 ## Overview
 
@@ -15,24 +17,6 @@ Interfazzle handles the complete documentation generation pipeline:
 3. **Markdown Conversion**: Converts symbol graphs to interface-style Markdown documentation
 
 This approach replaces the old `sourcedocs` tool, which failed for me when the package includes dependencies with pre-built binaries.
-
-## Installation
-
-### Install from Source
-
-```bash
-git clone https://github.com/czottmann/interfazzle.git
-cd interfazzle
-swift build -c release
-cp .build/release/interfazzle /usr/local/bin/
-```
-
-### Build Locally
-
-```bash
-swift build
-# Use with: swift run interfazzle
-```
 
 ## Demo
 
@@ -207,6 +191,28 @@ If a module folder contains a `README.md` file, its content is automatically inc
    - Shifts it to H3 to fit under the module's H2
    - Applies the same shift to all other headings to maintain hierarchy
 3. Example: README with `##` and `###` → becomes `###` and `####` in output
+
+## Installation
+
+### Install from Source
+
+```bash
+git clone https://github.com/czottmann/interfazzle.git
+cd interfazzle
+swift build -c release
+cp .build/release/interfazzle /usr/local/bin/
+```
+
+### Build Locally
+
+```bash
+swift build
+# Use with: swift run interfazzle
+```
+
+### Mise tasks
+
+This project uses [mise-en-place's tasks](https://mise.jdx.dev/tasks/) for convenience. Run `mise tasks` to see what's available.
 
 ## Architecture
 
